@@ -1,0 +1,2754 @@
+<title>写字岛</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* 布局：一屏应用。顶部状态条 + 可滚动主区；练字页是「提示栏 + 写字板」，竖屏或窄屏时提示栏叠到写字板上方、工具按钮落到下方。
+   视觉：晴天底色上的白色练习本，四线三格（红色基线）贯穿各处；只做这一套明亮主题，孩子的写字纸不跟随深色模式。 */
+:root {
+  color-scheme: light;
+  --sky: #E4F3FF;          /* 页面底色 */
+  --sky-deep: #CBE6FF;
+  --card: #FFFFFF;
+  --soft: #F1F6FC;         /* 卡片里的浅底 */
+  --ink: #1D2B4F;          /* 主文字，也是默认墨水 */
+  --ink-2: #56678C;        /* 次要文字 */
+  --line: #D0E1F3;         /* 描边、按钮底边 */
+  --mute: #BFCDE0;         /* 未解锁、未点亮 */
+  --mute-deep: #A3B4CB;
+  --sun: #FFC533;          /* 星星 */
+  --sun-deep: #D98C00;
+  --sun-soft: #FFF2CC;
+  --coral: #FF6B57;        /* 数字岛、基线 */
+  --coral-deep: #D64835;
+  --sea: #2B8CFF;          /* 大写岛、主色 */
+  --sea-deep: #1766CC;
+  --grape: #8257F5;        /* 小写岛 */
+  --grape-deep: #5F37CC;
+  --leaf: #1FAE70;         /* 写对了、起笔点 */
+  --leaf-deep: #14845A;
+  --gem: #12B8CC;          /* 宝石 */
+  --rose: #E5486A;         /* 提醒 */
+  --rose-deep: #B32E4C;
+  --warn-bg: #FFF0D2;
+  --on-accent: #FFFFFF;
+  --shade: rgba(29, 43, 79, .18);
+  --veil: rgba(20, 32, 64, .46);
+  --accent: var(--sea);
+  --accent-deep: var(--sea-deep);
+  --f-display: "ZCOOL KuaiLe", "Fredoka", ui-rounded, "SF Pro Rounded", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --f-body: ui-rounded, "SF Pro Rounded", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+  --f-num: "Fredoka", ui-rounded, "SF Pro Rounded", "PingFang SC", "Hiragino Sans GB", system-ui, sans-serif;
+  --r: 22px;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { height: 100%; box-sizing: border-box; }
+body {
+  height: 100%; margin: 0; overflow: hidden;
+  background: var(--sky) linear-gradient(var(--sky), var(--sky-deep)) fixed;
+  color: var(--ink); font: 16px/1.45 var(--f-body);
+  -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent; touch-action: pan-x pan-y; overscroll-behavior: none;
+}
+button { font: inherit; color: inherit; border: 0; background: none; padding: 0; margin: 0; cursor: pointer; touch-action: manipulation; }
+button:focus-visible { outline: 3px solid var(--sea); outline-offset: 3px; }
+h1, h2, h3, h4, p { margin: 0; }
+h1, h2, h3 { text-wrap: balance; }
+
+.app {
+  height: 100%; max-width: 1280px; margin: 0 auto; display: flex; flex-direction: column;
+  padding-block: 10px 12px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.screen { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 12px; }
+.scroll { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; padding-bottom: 14px; }
+
+.w-num { --accent: var(--coral); --accent-deep: var(--coral-deep); }
+.w-upper { --accent: var(--sea); --accent-deep: var(--sea-deep); }
+.w-lower { --accent: var(--grape); --accent-deep: var(--grape-deep); }
+
+/* ---------- 图标、星星、字形 ---------- */
+.ic { width: 24px; height: 24px; fill: currentColor; flex: none; pointer-events: none; }
+.ic.on { fill: var(--sun); stroke: var(--sun-deep); stroke-width: 1.2; }
+.ic.off { fill: var(--line); }
+.stars { display: inline-flex; gap: 2px; }
+.stars .ic { width: 22px; height: 22px; }
+.stars-s .ic { width: 15px; height: 15px; }
+.gl { display: block; height: 64px; width: auto; overflow: visible; pointer-events: none; }
+.gl path { fill: none; stroke: currentColor; stroke-width: 13; stroke-linecap: round; stroke-linejoin: round; }
+.gl circle { fill: currentColor; }
+.gl-rule line { stroke: currentColor; stroke-width: 2; opacity: .32; }
+.gl-rule .mid { stroke-dasharray: 7 6; }
+.gl-rule .base { opacity: .75; }
+
+/* ---------- 顶部条 ---------- */
+.topbar { display: flex; align-items: center; gap: 10px; min-height: 52px; }
+.top-title { font: 28px/1.1 var(--f-display); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chips { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+.chip { display: inline-flex; align-items: center; gap: 5px; height: 42px; padding: 0 13px 0 9px; border-radius: 21px; background: var(--card); font: 600 19px/1 var(--f-num); box-shadow: 0 3px 0 var(--line); font-variant-numeric: tabular-nums; }
+.chip small { font-size: 13px; color: var(--ink-2); font-weight: 500; }
+.chip-gem .ic { fill: var(--gem); }
+.chip-fire .ic { fill: var(--coral); }
+.chip.bump { animation: bump .45s; }
+.ibtn { width: 48px; height: 48px; border-radius: 50%; background: var(--card); display: grid; place-items: center; box-shadow: 0 3px 0 var(--line); flex: none; }
+.ibtn:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--line); }
+
+/* ---------- 按钮 ---------- */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 56px; padding: 0 20px; border-radius: 18px; font: 21px/1 var(--f-display); background: var(--card); color: var(--ink); box-shadow: 0 4px 0 var(--line); white-space: nowrap; }
+.btn:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--line); }
+.btn-soft { background: var(--card); }
+.btn-go { background: var(--leaf); color: var(--on-accent); box-shadow: 0 4px 0 var(--leaf-deep); }
+.btn-go:active { box-shadow: 0 1px 0 var(--leaf-deep); }
+.btn-danger { background: var(--rose); color: var(--on-accent); box-shadow: 0 4px 0 var(--rose-deep); }
+.bar { display: block; height: 10px; border-radius: 5px; background: var(--soft); overflow: hidden; }
+.bar i { display: block; height: 100%; border-radius: 5px; background: var(--accent); }
+.seg { display: inline-flex; background: var(--card); border-radius: 16px; padding: 4px; gap: 4px; box-shadow: 0 3px 0 var(--line); }
+.seg button { min-height: 44px; padding: 0 16px; border-radius: 12px; font: 18px/1 var(--f-display); color: var(--ink-2); white-space: nowrap; }
+.seg button.on { background: var(--accent); color: var(--on-accent); }
+.card { background: var(--card); border-radius: var(--r); padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.card h3 { font: 22px/1.2 var(--f-display); }
+.hint-line { color: var(--ink-2); font-size: 14px; padding: 10px 2px 0; }
+.empty { color: var(--ink-2); }
+
+/* ---------- 首页 ---------- */
+.me { display: flex; align-items: center; gap: 10px; background: var(--card); border-radius: 26px; padding: 4px 16px 4px 6px; box-shadow: 0 3px 0 var(--line); min-width: 0; }
+.me-face { font-size: 34px; line-height: 44px; width: 44px; text-align: center; }
+.me-info { display: flex; flex-direction: column; gap: 5px; min-width: 0; text-align: left; }
+.me-title { font: 17px/1 var(--f-display); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.me-row { display: flex; align-items: center; gap: 8px; }
+.me-score { font: 500 13px/1 var(--f-num); color: var(--ink-2); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.bar-xp { width: 96px; max-width: 100%; height: 8px; flex: none; }
+.bar-xp i { background: var(--sun); }
+.home-main { display: flex; flex-direction: column; gap: 16px; }
+.hero { padding: 6px 2px 0; display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+.hero h1 { font: 46px/1.05 var(--f-display); letter-spacing: .04em; }
+.hero p { color: var(--ink-2); font-size: 18px; }
+.islands { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.island { display: flex; flex-direction: column; text-align: left; background: var(--card); border-radius: 26px; overflow: hidden; box-shadow: 0 6px 0 var(--accent-deep); min-width: 0; }
+.island:active { transform: translateY(4px); box-shadow: 0 2px 0 var(--accent-deep); }
+.island-art { display: block; padding: 14px 12px 8px; background: var(--accent); color: var(--on-accent); overflow: hidden; }
+.island-art .gl { width: 100%; height: auto; }
+.island-info { display: flex; flex-direction: column; gap: 8px; padding: 14px 16px 16px; }
+.island-name { font: 26px/1.1 var(--f-display); }
+.island-meta { color: var(--ink-2); font-size: 15px; }
+.island-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.island-stars { display: inline-flex; align-items: center; gap: 4px; font: 500 16px/1 var(--f-num); color: var(--ink-2); }
+.island-stars b { color: var(--ink); font-weight: 600; }
+.island-stars .ic { width: 20px; height: 20px; }
+.island-go { display: inline-flex; align-items: center; gap: 2px; padding: 8px 10px 8px 16px; border-radius: 16px; background: var(--accent); color: var(--on-accent); font: 19px/1 var(--f-display); }
+.island-go .ic { width: 20px; height: 20px; }
+.home-row { display: grid; grid-template-columns: minmax(0, 1.7fr) repeat(3, minmax(0, 1fr)); gap: 12px; }
+.goal { position: relative; display: flex; align-items: center; gap: 14px; background: var(--card); border-radius: var(--r); padding: 12px 16px; min-width: 0; }
+.ring { width: 68px; height: 68px; flex: none; }
+.ring circle { fill: none; stroke-width: 8; stroke-linecap: round; }
+.ring-bg { stroke: var(--soft); }
+.ring-fg { stroke: var(--leaf); }
+.goal-num { position: absolute; left: 16px; width: 68px; text-align: center; font: 500 14px/1 var(--f-num); color: var(--ink-2); }
+.goal-num b { font-size: 20px; font-weight: 600; color: var(--ink); }
+.goal-text { display: flex; flex-direction: column; min-width: 0; }
+.goal-text b { font: 20px/1.2 var(--f-display); font-weight: 400; }
+.goal-text span { color: var(--ink-2); font-size: 14px; }
+.nav { display: flex; align-items: center; justify-content: center; gap: 10px; background: var(--card); border-radius: var(--r); padding: 12px; font: 20px/1.1 var(--f-display); box-shadow: 0 4px 0 var(--line); min-width: 0; }
+.nav:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--line); }
+.nav .ic { width: 40px; height: 40px; padding: 8px; border-radius: 14px; color: var(--on-accent); }
+.n-pick .ic { background: var(--sea); }
+.n-prog .ic { background: var(--leaf); }
+.n-shop .ic { background: var(--gem); }
+
+/* ---------- 关卡地图 ---------- */
+.map-scroll { display: flex; flex-direction: column; }
+.track { position: relative; flex: none; margin-block: auto; }
+.map-tip { flex: none; text-align: center; color: var(--ink-2); font-size: 15px; padding: 8px 0 2px; }
+.track-path { position: absolute; inset: 0; width: 100%; height: 100%; }
+.track-path path { fill: none; stroke: var(--card); stroke-width: 12; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1 26; }
+.node { position: absolute; transform: translateX(-50%); width: 136px; display: flex; flex-direction: column; align-items: center; gap: 5px; }
+.node-ball { width: 88px; height: 88px; border-radius: 50%; display: grid; place-items: center; background: var(--accent); color: var(--on-accent); font: 700 40px/1 var(--f-num); box-shadow: 0 6px 0 var(--accent-deep), 0 0 0 6px var(--card); }
+.node-ball .ic { width: 40px; height: 40px; }
+.node:active .node-ball { transform: translateY(3px); box-shadow: 0 3px 0 var(--accent-deep), 0 0 0 6px var(--card); }
+.node.boss .node-ball { background: var(--sun); color: var(--ink); box-shadow: 0 6px 0 var(--sun-deep), 0 0 0 6px var(--card); }
+.node.locked .node-ball { background: var(--mute); box-shadow: 0 6px 0 var(--mute-deep), 0 0 0 6px var(--card); }
+.node.next .node-ball { animation: bob 1.5s ease-in-out infinite; }
+.node .stars { margin-top: 6px; }
+.node-label { font: 600 17px/1.3 var(--f-num); letter-spacing: .1em; color: var(--ink-2); background: var(--card); padding: 2px 12px; border-radius: 12px; }
+.node.boss .node-label { font-family: var(--f-display); font-weight: 400; letter-spacing: 0; }
+
+/* ---------- 练字 ---------- */
+.pips { flex: 1; min-width: 0; display: flex; justify-content: center; align-items: center; gap: 6px; flex-wrap: wrap; }
+.pip { width: 24px; height: 10px; border-radius: 5px; background: var(--card); }
+.pip.cur { box-shadow: 0 0 0 3px var(--sea); }
+.pip.s1 { background: var(--mute); }
+.pip.s2 { background: var(--sun-soft); box-shadow: inset 0 0 0 2px var(--sun); }
+.pip.s3 { background: var(--sun); }
+.pip.cur.s1, .pip.cur.s2, .pip.cur.s3 { box-shadow: 0 0 0 3px var(--sea); }
+.pip-text { font: 500 18px/1 var(--f-num); color: var(--ink-2); }
+.pip-text b { color: var(--ink); font-weight: 600; font-size: 22px; }
+
+.play-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 14px; }
+.hand-left .play-body { grid-template-columns: minmax(0, 1fr) 250px; }
+.hand-left .side { order: 2; }
+.side { display: flex; flex-direction: column; gap: 12px; min-height: 0; min-width: 0; }
+.prompt { position: relative; background: var(--card); border-radius: var(--r); padding: 12px 14px 14px; display: flex; flex-direction: column; align-items: center; gap: 4px; overflow: hidden; }
+.mode-tag { align-self: flex-start; font: 17px/1 var(--f-display); padding: 6px 12px; border-radius: 12px; color: var(--on-accent); background: var(--sea); }
+.mode-tag[data-mode="dots"] { background: var(--grape); }
+.mode-tag[data-mode="write"] { background: var(--coral); }
+.model { display: flex; justify-content: center; width: 100%; padding: 4px 0; color: var(--ink); }
+.model .gl { height: 150px; }
+.model .gl-lower { height: 202px; }
+.model .gl-rule line { stroke: var(--sea); }
+.model .gl-rule .base { stroke: var(--coral); opacity: .9; }
+.prompt-text { font: 22px/1.2 var(--f-display); }
+.ibtn-speak { position: absolute; top: 8px; right: 8px; background: var(--soft); box-shadow: none; }
+.buddy { display: flex; align-items: flex-end; gap: 6px; min-width: 0; }
+.buddy-face { font-size: 50px; line-height: 1; flex: none; }
+.bubble { flex: 1; min-width: 0; background: var(--card); border-radius: 18px 18px 18px 5px; padding: 10px 14px; font-size: 17px; line-height: 1.35; }
+.bubble.warn { background: var(--warn-bg); }
+.bubble.pop { animation: pop .28s; }
+.tools { margin-top: auto; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.tools .btn { padding: 0 10px; }
+.tools .btn-go { grid-column: 1 / -1; min-height: 66px; font-size: 25px; }
+
+.board-wrap { position: relative; min-width: 0; min-height: 0; border-radius: 26px; overflow: hidden; box-shadow: 0 6px 0 var(--line); }
+.board-wrap.shake { animation: shake .32s; }
+.board {
+  --b-paper: #FFFFFF; --b-line: #A9CDF2; --b-base: #FF8474; --b-road: #E4EBF6; --b-dash: #9FB0CC;
+  --b-fill: #FFE08A; --b-ink: #22335C; --b-wrong: #F4A0B0; --b-start: #1FAE70; --b-next: #9FB0CC;
+  --b-demo: #2B8CFF; --b-ghost: rgba(43, 140, 255, .22);
+  position: absolute; inset: 0; background: var(--b-paper); touch-action: none; cursor: crosshair;
+}
+.board[data-skin="mint"] { --b-paper: #EAF6E1; --b-line: #9CCB9A; --b-base: #F08A6C; --b-road: #D3E7C8; --b-dash: #86A886; --b-next: #86A886; }
+.board[data-skin="chalk"] {
+  --b-paper: #22463F; --b-line: rgba(255, 255, 255, .42); --b-base: #FFAE9C; --b-road: rgba(255, 255, 255, .15); --b-dash: rgba(255, 255, 255, .58);
+  --b-fill: rgba(255, 214, 102, .45); --b-ink: #FBFBF2; --b-wrong: #FF9BAE; --b-start: #57D9A0; --b-next: rgba(255, 255, 255, .5);
+  --b-demo: #7CC4FF; --b-ghost: rgba(124, 196, 255, .35);
+}
+.board[data-skin="night"] {
+  --b-paper: #121A3E; --b-line: rgba(160, 190, 255, .42); --b-base: #FF9A8A; --b-road: rgba(160, 190, 255, .17); --b-dash: rgba(190, 210, 255, .62);
+  --b-fill: rgba(255, 214, 102, .5); --b-ink: #F3F6FF; --b-wrong: #FF9BAE; --b-start: #57D9A0; --b-next: rgba(190, 210, 255, .55);
+  --b-demo: #7CC4FF; --b-ghost: rgba(124, 196, 255, .35);
+  background-image: radial-gradient(#FFFFFF 1px, transparent 1.6px), radial-gradient(rgba(255, 255, 255, .6) 1px, transparent 1.4px);
+  background-size: 130px 110px, 90px 150px; background-position: 20px 30px, 60px 80px;
+}
+.board > svg, .board > canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; pointer-events: none; }
+.b-line { stroke: var(--b-line); stroke-width: 2; }
+.b-line.l-mid { stroke-dasharray: 10 8; }
+.b-line.l-base { stroke: var(--b-base); stroke-width: 3; }
+.g-road, .g-fill, .g-ghost { fill: none; stroke-width: 15; stroke-linecap: round; stroke-linejoin: round; }
+.g-road { stroke: var(--b-road); }
+.g-fill { stroke: var(--b-fill); }
+.g-ghost { stroke: var(--b-ghost); }
+.g-road-dot { fill: var(--b-road); }
+.g-fill-dot { fill: var(--b-fill); opacity: 0; }
+.g-ghost-dot { fill: var(--b-ghost); }
+.g-dash { fill: none; stroke: var(--b-dash); stroke-width: 1.4; stroke-dasharray: 3.5 3.5; stroke-linecap: round; stroke-linejoin: round; }
+.g-dots { fill: none; stroke: var(--b-dash); stroke-width: 3; stroke-dasharray: .1 7; stroke-linecap: round; stroke-linejoin: round; }
+.g-dots-dot { fill: none; stroke: var(--b-dash); stroke-width: 2.4; stroke-dasharray: .1 5.4; stroke-linecap: round; }
+.b-fx text { text-anchor: middle; font-family: var(--f-num); font-weight: 700; fill: var(--on-accent); }
+.fx-dot { fill: var(--b-start); }
+.fx-pulse { fill: var(--b-start); opacity: .4; transform-box: fill-box; transform-origin: center; animation: pulse 1.25s ease-out infinite; }
+.fx-next circle { fill: var(--b-next); }
+.fx-arrow { fill: none; stroke: var(--b-start); stroke-width: 4.5; stroke-linecap: round; stroke-linejoin: round; }
+.demo-path { fill: none; stroke: var(--b-demo); stroke-width: 6.5; stroke-linecap: round; stroke-linejoin: round; }
+.demo-dot { fill: var(--b-demo); }
+.demo-pen { fill: var(--b-demo); stroke: var(--card); stroke-width: 2.2; }
+
+.input-chip { position: absolute; top: 12px; right: 12px; display: inline-flex; align-items: center; gap: 5px; min-height: 36px; padding: 0 12px; border-radius: 18px; background: var(--card); color: var(--ink-2); font-size: 14px; box-shadow: 0 2px 8px var(--shade); }
+.input-chip .ic { width: 18px; height: 18px; }
+.hand-left .input-chip { right: auto; left: 12px; }
+.banner { position: absolute; left: 12px; right: 12px; bottom: 12px; display: flex; align-items: center; gap: 10px 18px; flex-wrap: wrap; background: var(--card); border-radius: 22px; padding: 12px 14px 12px 18px; box-shadow: 0 10px 28px var(--shade); animation: rise .3s; }
+.banner-main { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.banner-stars { display: flex; gap: 2px; flex: none; }
+.banner-stars .ic { width: 46px; height: 46px; }
+.banner-text { display: flex; flex-direction: column; min-width: 0; }
+.banner-text b { font: 24px/1.2 var(--f-display); font-weight: 400; }
+.banner-text span { color: var(--ink-2); font-size: 15px; }
+.banner-rw { display: flex; gap: 8px; flex-wrap: wrap; }
+.rw { display: inline-flex; align-items: center; gap: 4px; padding: 6px 12px; border-radius: 14px; background: var(--soft); font: 600 18px/1 var(--f-num); }
+.rw-gem .ic { fill: var(--gem); width: 20px; height: 20px; }
+.rw-combo { background: var(--sun-soft); font-family: var(--f-display); font-weight: 400; }
+.banner-act { margin-left: auto; display: flex; gap: 10px; flex-wrap: wrap; }
+.banner-act .btn-soft { background: var(--soft); box-shadow: 0 4px 0 var(--line); }
+.btn.auto { position: relative; overflow: hidden; }
+.btn.auto::after { content: ""; position: absolute; left: 0; bottom: 0; height: 6px; width: 100%; background: var(--on-accent); opacity: .55; transform-origin: left; animation: countdown 2.8s linear forwards; }
+.ic.pop0, .ic.pop1, .ic.pop2 { animation: starpop .4s backwards; }
+.ic.pop0 { animation-delay: .15s; } .ic.pop1 { animation-delay: .35s; } .ic.pop2 { animation-delay: .55s; }
+
+/* ---------- 自由练习 ---------- */
+.pick-bar { display: flex; gap: 12px; flex-wrap: wrap; justify-content: space-between; }
+.seg-mode button.on { background: var(--ink); }
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(108px, 1fr)); gap: 12px; padding: 2px 2px 6px; }
+.tile { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 8px 10px; border-radius: 20px; background: var(--card); color: var(--ink); box-shadow: 0 4px 0 var(--line); }
+.tile:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--line); }
+.tile .gl { height: 84px; }
+.tile.st1 { background: var(--card) linear-gradient(to top, var(--soft) 34%, transparent 34%); }
+.tile.st2 { background: var(--card) linear-gradient(to top, var(--soft) 67%, transparent 67%); }
+.tile.st3 { background: var(--soft); box-shadow: 0 4px 0 var(--accent); }
+
+/* ---------- 成长记录 ---------- */
+.pg { display: flex; flex-direction: column; gap: 14px; }
+.stat-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.stat { background: var(--card); border-radius: 18px; padding: 12px 16px; min-width: 0; }
+.stat b { display: block; font: 600 32px/1.15 var(--f-num); font-variant-numeric: tabular-nums; }
+.stat small { font-size: 16px; font-weight: 500; color: var(--ink-2); }
+.stat span { color: var(--ink-2); font-size: 14px; }
+.chart { position: relative; height: 190px; }
+.bars { position: absolute; inset: 24px 0 0 0; display: flex; }
+.bar-col { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; }
+.bar-box { flex: 1; width: 100%; display: flex; align-items: flex-end; justify-content: center; border-bottom: 2px solid var(--line); padding: 0 1px; }
+.bar-box i { position: relative; display: block; width: min(32px, 62%); background: var(--sea); border-radius: 4px 4px 0 0; }
+.bar-box em { position: absolute; left: 50%; bottom: 100%; transform: translateX(-50%); padding-bottom: 3px; font: 600 15px/1 var(--f-num); font-style: normal; color: var(--ink); }
+.bar-x { height: 26px; line-height: 26px; font-size: 13px; color: var(--ink-2); white-space: nowrap; }
+.bar-col.today .bar-x { color: var(--ink); font-weight: 700; }
+.bar-col:hover .bar-box i, .bar-col.sel .bar-box i { background: var(--sea-deep); }
+.bar-col.sel .bar-x { color: var(--sea-deep); font-weight: 700; }
+.goal-line { position: absolute; left: 0; right: 0; bottom: calc(26px + 140px * var(--g)); border-top: 2px dashed var(--mute); pointer-events: none; }
+.goal-line span { position: absolute; right: 0; bottom: 3px; font-size: 12px; color: var(--ink-2); background: var(--card); padding-left: 6px; }
+.chart-note { color: var(--ink-2); font-size: 14px; min-height: 1.45em; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--ink-2); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend .cell { width: 16px; height: 16px; border-radius: 5px; padding: 0; }
+.pg-group { display: flex; flex-direction: column; gap: 6px; }
+.pg-group h4 { font-size: 14px; color: var(--ink-2); font-weight: 600; }
+.cells { display: grid; grid-template-columns: repeat(auto-fill, minmax(48px, 1fr)); gap: 6px; }
+.cell { aspect-ratio: 1; border-radius: 12px; display: grid; place-items: center; padding: 6px; background: var(--soft); color: var(--ink-2); }
+.cell .gl { height: 100%; max-width: 100%; }
+.cell.st1 { background: #CFE4FF; color: var(--ink); }
+.cell.st2 { background: #8FC0FF; color: var(--ink); }
+.cell.st3 { background: var(--sea); color: var(--on-accent); }
+.weak { display: flex; flex-wrap: wrap; gap: 10px; }
+.weak-item { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 12px; border-radius: 16px; background: var(--soft); color: var(--ink); font: 600 15px/1.2 var(--f-num); }
+.weak-item .gl { height: 54px; }
+.weak-item span { color: var(--ink-2); }
+.card > .btn { align-self: flex-start; }
+.badges { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
+.badge { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 10px; align-items: center; padding: 10px 12px; border-radius: 16px; background: var(--soft); color: var(--ink-2); }
+.badge .ic { grid-row: 1 / span 2; width: 34px; height: 34px; fill: var(--mute); }
+.badge b { font-size: 16px; }
+.badge span { font-size: 13px; }
+.badge.got { background: var(--sun-soft); color: var(--ink); }
+.badge.got .ic { fill: var(--sun-deep); }
+.sync-line { display: flex; align-items: center; justify-content: center; gap: 6px; color: var(--ink-2); font-size: 13px; text-align: center; }
+.sync-line .ic { width: 18px; height: 18px; }
+
+/* ---------- 商店 ---------- */
+.shop-main { display: flex; flex-direction: column; gap: 14px; }
+.shop-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(136px, 1fr)); gap: 12px; }
+.shop-item { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 12px 10px; border-radius: 18px; background: var(--soft); border: 3px solid transparent; min-width: 0; }
+.shop-item.using { border-color: var(--leaf); background: var(--card); }
+.shop-item b { font: 18px/1.2 var(--f-display); font-weight: 400; }
+.pen-prev { width: 100%; height: 56px; }
+.board-prev { position: relative !important; inset: auto !important; display: block; width: 100%; height: 56px; border-radius: 12px; overflow: hidden; cursor: inherit; }
+.board-prev i { position: absolute; left: 0; right: 0; height: 2px; background: var(--b-line); }
+.board-prev i:nth-child(1) { top: 20%; } .board-prev i:nth-child(2) { top: 42%; opacity: .6; }
+.board-prev i:nth-child(3) { top: 64%; background: var(--b-base); } .board-prev i:nth-child(4) { top: 86%; }
+.buddy-prev { font-size: 46px; line-height: 56px; }
+.shop-btn { display: inline-flex; align-items: center; gap: 5px; min-height: 36px; padding: 0 14px; border-radius: 18px; font: 600 17px/1 var(--f-num); }
+.shop-btn .ic { width: 18px; height: 18px; }
+.shop-btn.price { background: var(--card); box-shadow: 0 2px 0 var(--line); }
+.shop-btn.price .ic { fill: var(--gem); }
+.shop-btn.price.poor { color: var(--ink-2); }
+.shop-btn.own { background: var(--sea); color: var(--on-accent); font-family: var(--f-display); font-weight: 400; }
+.shop-btn.using { color: var(--leaf-deep); font-family: var(--f-display); font-weight: 400; }
+
+/* ---------- 弹窗 ---------- */
+.modal-root {
+  position: fixed; inset: 0; z-index: 50; display: grid; place-items: center;
+  padding: calc(16px + env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) calc(16px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+}
+.modal-back { position: absolute; inset: 0; background: var(--veil); cursor: pointer; }
+.modal { position: relative; background: var(--card); border-radius: 28px; padding: 22px; width: min(560px, 100%); max-height: 100%; overflow-y: auto; animation: rise .28s; }
+.modal-x { position: absolute; top: 14px; right: 14px; background: var(--soft); box-shadow: none; }
+.modal h3 { font: 26px/1.2 var(--f-display); }
+.result { display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; }
+.result-face { font-size: 72px; line-height: 1; }
+.result h2 { font: 34px/1.15 var(--f-display); }
+.result-stars { display: flex; gap: 4px; }
+.result-stars .ic { width: 68px; height: 68px; }
+.result-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; width: 100%; }
+.result-stats div { background: var(--soft); border-radius: 16px; padding: 10px 6px; }
+.result-stats b { display: block; font: 600 26px/1.2 var(--f-num); }
+.result-stats span { font-size: 13px; color: var(--ink-2); }
+.result-act { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; padding-top: 4px; }
+.result-act .btn-soft, .ask-act .btn-soft, .reset-ask .btn-soft, .opt-reset > .btn-soft { background: var(--soft); }
+.ask { display: flex; flex-direction: column; gap: 10px; }
+.ask p { color: var(--ink-2); }
+.ask-act { display: flex; gap: 10px; flex-wrap: wrap; padding-top: 6px; }
+.settings { display: flex; flex-direction: column; }
+.settings h3 { padding-bottom: 10px; }
+.opt { display: flex; align-items: center; justify-content: space-between; gap: 8px 12px; flex-wrap: wrap; padding: 10px 0; border-top: 1px solid var(--line); }
+.opt-name { min-width: 0; flex: 1 1 150px; }
+.opt-name b { display: block; font-size: 17px; }
+.opt-name span { font-size: 13px; color: var(--ink-2); }
+.opt .seg { box-shadow: none; background: var(--soft); }
+.opt .seg button { min-height: 40px; padding: 0 13px; font-size: 16px; }
+.reset-ask { display: flex; gap: 8px; flex-wrap: wrap; }
+.info { display: flex; flex-direction: column; gap: 14px; }
+.info-head { display: flex; align-items: center; gap: 16px; padding-right: 52px; }
+.info-glyph { background: var(--soft); border-radius: 18px; padding: 10px 14px; }
+.info-glyph .gl { height: 88px; }
+.info-head p { color: var(--ink-2); }
+.info-modes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.info-mode { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 6px; border-radius: 16px; background: var(--soft); }
+.info-mode b { font: 19px/1.1 var(--f-display); font-weight: 400; }
+.info-mode span:last-child { font-size: 13px; color: var(--sea-deep); font-weight: 700; }
+.spark { width: 100%; max-width: 280px; height: auto; display: block; }
+.spark polyline { fill: none; stroke: var(--sea); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.spark circle { fill: var(--sea); stroke: var(--card); stroke-width: 2; }
+.spark-base { stroke: var(--line); stroke-width: 1; }
+.spark-cap { font-size: 13px; color: var(--ink-2); }
+
+/* ---------- 提示条、彩纸 ---------- */
+.toasts { position: fixed; z-index: 60; top: calc(env(safe-area-inset-top, 0px) + 12px); left: 0; right: 0; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 0 max(16px, env(safe-area-inset-right, 0px)) 0 max(16px, env(safe-area-inset-left, 0px)); pointer-events: none; }
+.toast { display: inline-flex; align-items: center; gap: 8px; max-width: 100%; padding: 10px 18px; border-radius: 20px; background: var(--ink); color: var(--on-accent); font-size: 16px; box-shadow: 0 8px 22px var(--shade); animation: drop .28s; transition: opacity .35s; }
+.toast.good { background: var(--leaf-deep); }
+.toast.out { opacity: 0; }
+.toast .ic { width: 20px; height: 20px; }
+.confetti { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 70; pointer-events: none; }
+
+/* ---------- 动画 ---------- */
+@keyframes pop { from { transform: scale(.92); opacity: .4; } to { transform: none; opacity: 1; } }
+@keyframes rise { from { transform: translateY(16px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes drop { from { transform: translateY(-14px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes pulse { from { transform: scale(1); opacity: .45; } to { transform: scale(2.1); opacity: 0; } }
+@keyframes bob { 0%, 100% { transform: none; } 50% { transform: translateY(-7px); } }
+@keyframes shake { 0%, 100% { transform: none; } 25% { transform: translateX(-7px); } 75% { transform: translateX(7px); } }
+@keyframes countdown { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+@keyframes bump { 0%, 100% { transform: none; } 40% { transform: scale(1.18); } }
+@keyframes starpop { from { transform: scale(0) rotate(-40deg); } 70% { transform: scale(1.25); } to { transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
+
+/* ---------- 竖屏、窄屏 ---------- */
+@media (max-width: 860px), (orientation: portrait) {
+  .play-body, .hand-left .play-body { grid-template-columns: auto minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto; grid-template-areas: "prompt buddy" "board board" "tools tools"; gap: 10px; }
+  .side { display: contents; }
+  .prompt { grid-area: prompt; flex-direction: row; align-items: center; gap: 10px; padding: 8px 60px 8px 10px; }
+  .prompt .mode-tag { position: absolute; left: 10px; top: 8px; font-size: 14px; padding: 4px 9px; }
+  .model { width: auto; padding: 22px 0 0; }
+  .model .gl { height: 78px; }
+  .model .gl-lower { height: 104px; margin-bottom: -22px; }
+  .prompt-text { font-size: 19px; white-space: nowrap; }
+  .ibtn-speak { top: 50%; transform: translateY(-50%); }
+  .ibtn-speak:active { transform: translateY(calc(-50% + 2px)); }
+  .buddy { grid-area: buddy; align-items: center; }
+  .buddy-face { font-size: 42px; }
+  .board-wrap { grid-area: board; }
+  .tools { grid-area: tools; margin-top: 0; grid-template-columns: 1fr 1fr 1.5fr; }
+  .tools .btn-go { grid-column: auto; min-height: 56px; font-size: 22px; }
+  .tools:has(#btnCheck[hidden]) { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 760px) {
+  .islands { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  .island { flex-direction: row; align-items: stretch; }
+  .island-art { flex: none; width: 132px; display: flex; align-items: center; padding: 10px 8px; }
+  .island-info { flex: 1; min-width: 0; padding: 12px 14px; gap: 6px; }
+  .island-name { font-size: 22px; }
+  .home-row { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .goal { grid-column: 1 / -1; }
+  .nav { flex-direction: column; gap: 6px; font-size: 17px; padding: 12px 6px; }
+  .stat-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .hero h1 { font-size: 38px; }
+}
+@media (max-width: 520px) {
+  .bar-xp { width: 56px; }
+  .chip { height: 38px; padding: 0 10px 0 7px; font-size: 17px; }
+  .chip-fire small { display: none; }
+  .ibtn { width: 44px; height: 44px; }
+  .top-title { font-size: 23px; }
+  .buddy-face { display: none; }
+  .bubble { font-size: 15px; padding: 8px 12px; border-radius: 16px; }
+  .prompt-text { display: none; }
+  .prompt { padding-right: 56px; }
+  .banner { padding: 10px 12px; gap: 8px 12px; }
+  .banner-stars .ic { width: 34px; height: 34px; }
+  .banner-text b { font-size: 20px; }
+  .banner-act { width: 100%; margin-left: 0; }
+  .banner-act .btn { flex: 1; min-height: 50px; padding: 0 10px; font-size: 19px; }
+  .tools .btn { font-size: 18px; min-height: 52px; }
+  .seg button { padding: 0 12px; font-size: 16px; }
+  .tiles { grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 10px; }
+  .tile .gl { height: 64px; }
+  .result h2 { font-size: 28px; }
+  .result-stars .ic { width: 54px; height: 54px; }
+  .modal { padding: 18px; }
+  .info-modes { gap: 6px; }
+}
+</style>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <symbol id="i-star" viewBox="0 0 24 24"><path d="M12 2.2l3 6.3 6.8 1-5 4.8 1.2 6.9L12 17.9l-6 3.3 1.2-6.9-5-4.8 6.8-1z" stroke-linejoin="round"/></symbol>
+    <symbol id="i-gem" viewBox="0 0 24 24"><path d="M6.5 3.5h11L22 9.4 12 21 2 9.4z" stroke-linejoin="round"/><path d="M2 9.4h20M9 3.5L7.2 9.4 12 21l4.8-11.6L15 3.5" fill="none" stroke="rgba(255,255,255,.75)" stroke-width="1.3" stroke-linejoin="round"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4.5" y="10.5" width="15" height="10.5" rx="2.6"/><path d="M8 10.5V7.6a4 4 0 0 1 8 0v2.9" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></symbol>
+    <symbol id="i-crown" viewBox="0 0 24 24"><path d="M3.5 18.5h17l1.4-10-5.4 3.8L12 5.2 7.5 12.3 2.1 8.5z" stroke-linejoin="round"/></symbol>
+    <symbol id="i-back" viewBox="0 0 24 24"><path d="M14.5 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></symbol>
+    <symbol id="i-set" viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 12h3M11 12h9M4 17h11M19 17h1" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><circle cx="15" cy="7" r="2.3" fill="none" stroke="currentColor" stroke-width="2.4"/><circle cx="9" cy="12" r="2.3" fill="none" stroke="currentColor" stroke-width="2.4"/><circle cx="17" cy="17" r="2.3" fill="none" stroke="currentColor" stroke-width="2.4"/></symbol>
+    <symbol id="i-sound" viewBox="0 0 24 24"><path d="M4 9.2v5.6h3.6l5 4V5.2l-5 4z" stroke-linejoin="round"/><path d="M16 8.6a5 5 0 0 1 0 6.8M18.6 6a8.6 8.6 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.2v13.6L19 12z" stroke-linejoin="round"/></symbol>
+    <symbol id="i-redo" viewBox="0 0 24 24"><path d="M5 12a7 7 0 1 0 2.4-5.3" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><path d="M4.2 4.4v5h5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.6l4.6 4.6L19.2 7.4" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-next" viewBox="0 0 24 24"><path d="M9.5 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-flame" viewBox="0 0 24 24"><path d="M12.4 2.5c.6 3.4 5.6 5.6 5.6 11a6 6 0 0 1-12 0c0-2.4 1.2-3.9 2.3-5 .3 1.6 1 2.5 1.9 3 .1-3.4.6-6.6 2.2-9z" stroke-linejoin="round"/></symbol>
+    <symbol id="i-pencil" viewBox="0 0 24 24"><path d="M4 20l1.2-5L16.4 3.8a1.9 1.9 0 0 1 2.7 0l1.1 1.1a1.9 1.9 0 0 1 0 2.7L9 18.8z" stroke-linejoin="round"/><path d="M14.4 5.8l3.8 3.8" fill="none" stroke="rgba(255,255,255,.8)" stroke-width="1.6"/></symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24"><rect x="3.5" y="12" width="4.4" height="8.5" rx="1.4"/><rect x="9.8" y="6.5" width="4.4" height="14" rx="1.4"/><rect x="16.1" y="3.5" width="4.4" height="17" rx="1.4"/></symbol>
+    <symbol id="i-bag" viewBox="0 0 24 24"><path d="M5 8.5h14l1.2 11.2a1.6 1.6 0 0 1-1.6 1.8H5.4a1.6 1.6 0 0 1-1.6-1.8z" stroke-linejoin="round"/><path d="M8.6 8.5V7a3.4 3.4 0 0 1 6.8 0v1.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
+    <symbol id="i-medal" viewBox="0 0 24 24"><path d="M7.5 2.5h9l-2.4 6.2H9.9z" stroke-linejoin="round" opacity=".55"/><circle cx="12" cy="14.5" r="6.5"/></symbol>
+    <symbol id="i-cloud" viewBox="0 0 24 24"><path d="M7 18.5a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 18 10.5a4 4 0 0 1-.5 8z" stroke-linejoin="round"/></symbol>
+  </defs>
+</svg>
+
+<div class="app" id="app"></div>
+<div class="modal-root" id="modal" hidden></div>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+<canvas class="confetti" id="confetti" aria-hidden="true"></canvas>
+
+<script>
+/*
+ * 写字岛 — 笔画数据
+ *
+ * 坐标系（四线三格）：x 0..100，y 0 = 第一线（顶线），50 = 第二线（中线），
+ * 100 = 第三线（基线），150 = 第四线（底线）。
+ * 每个字符是若干笔画，每一笔是一条按书写方向排列的路径（只用 M / L / C）。
+ */
+(function (root) {
+  'use strict';
+
+  var r1 = function (n) { return Math.round(n * 10) / 10; };
+
+  // 椭圆弧 → 三次贝塞尔。角度：0° 向右，90° 向下（屏幕坐标），sweep 为正 = 顺时针。
+  // cont 为真时用 L 接到弧的起点（接在上一段后面），否则用 M 起笔。
+  function arc(cx, cy, rx, ry, a0, sweep, cont) {
+    var n = Math.max(1, Math.ceil(Math.abs(sweep) / 90));
+    var step = (sweep / n) * Math.PI / 180;
+    var k = (4 / 3) * Math.tan(step / 4);
+    var a = a0 * Math.PI / 180;
+    var x = cx + rx * Math.cos(a), y = cy + ry * Math.sin(a);
+    var d = (cont ? 'L' : 'M') + r1(x) + ' ' + r1(y);
+    for (var i = 0; i < n; i++) {
+      var b = a + step;
+      var x2 = cx + rx * Math.cos(b), y2 = cy + ry * Math.sin(b);
+      var c1x = x - k * rx * Math.sin(a), c1y = y + k * ry * Math.cos(a);
+      var c2x = x2 + k * rx * Math.sin(b), c2y = y2 - k * ry * Math.cos(b);
+      d += ' C' + r1(c1x) + ' ' + r1(c1y) + ' ' + r1(c2x) + ' ' + r1(c2y) + ' ' + r1(x2) + ' ' + r1(y2);
+      a = b; x = x2; y = y2;
+    }
+    return d;
+  }
+  var A = arc;
+
+  var G = {};
+
+  /* ---------- 数字 ---------- */
+  G['0'] = [A(50, 50, 30, 50, -90, -360)];
+  G['1'] = ['M30 26 L54 0 L54 100'];
+  G['2'] = [A(50, 27, 27, 27, -160, 200) + ' L22 100 L80 100'];
+  G['3'] = [A(48, 25, 26, 25, -150, 240) + ' ' + A(48, 75, 28, 25, -90, 240, true)];
+  G['4'] = ['M62 0 L14 68 L88 68', 'M62 0 L62 100'];
+  G['5'] = ['M30 0 L28 42 ' + A(48, 68, 30, 32, -130, 270, true), 'M30 0 L76 0'];
+  G['6'] = ['M64 2 C40 14 22 44 22 70 ' + A(50, 70, 28, 30, 180, -360, true)];
+  G['7'] = ['M18 0 L82 0 L40 100'];
+  G['8'] = [A(50, 25, 23, 25, -30, -240) + ' ' + A(50, 75, 27, 25, -90, 360, true) + ' ' + A(50, 25, 23, 25, 90, -120, true)];
+  G['9'] = [A(50, 30, 26, 30, 0, -360) + ' L76 100'];
+
+  /* ---------- 大写字母 ---------- */
+  G['A'] = ['M50 0 L12 100', 'M50 0 L88 100', 'M26 64 L74 64'];
+  G['B'] = ['M26 0 L26 100', 'M26 0 L46 0 ' + A(46, 24, 26, 24, -90, 180, true) + ' L26 48 L50 48 ' + A(50, 74, 30, 26, -90, 180, true) + ' L26 100'];
+  G['C'] = [A(52, 50, 34, 50, -50, -260)];
+  G['D'] = ['M24 0 L24 100', 'M24 0 L36 0 ' + A(36, 50, 44, 50, -90, 180, true) + ' L24 100'];
+  G['E'] = ['M24 0 L24 100', 'M24 0 L78 0', 'M24 50 L68 50', 'M24 100 L78 100'];
+  G['F'] = ['M26 0 L26 100', 'M26 0 L78 0', 'M26 50 L68 50'];
+  G['G'] = [A(52, 50, 34, 50, -50, -310) + ' L58 50'];
+  G['H'] = ['M20 0 L20 100', 'M80 0 L80 100', 'M20 50 L80 50'];
+  G['I'] = ['M50 0 L50 100', 'M28 0 L72 0', 'M28 100 L72 100'];
+  G['J'] = ['M64 0 L64 70 ' + A(42, 70, 22, 30, 0, 160, true)];
+  G['K'] = ['M24 0 L24 100', 'M78 0 L24 54 L80 100'];
+  G['L'] = ['M26 0 L26 100 L78 100'];
+  G['M'] = ['M14 0 L14 100', 'M14 0 L50 80 L86 0 L86 100'];
+  G['N'] = ['M22 0 L22 100', 'M22 0 L78 100 L78 0'];
+  G['O'] = [A(50, 50, 38, 50, -90, -360)];
+  G['P'] = ['M26 0 L26 100', 'M26 0 L50 0 ' + A(50, 25, 26, 25, -90, 180, true) + ' L26 50'];
+  G['Q'] = [A(50, 50, 38, 50, -90, -360), 'M60 74 L88 104'];
+  G['R'] = ['M26 0 L26 100', 'M26 0 L50 0 ' + A(50, 25, 26, 25, -90, 180, true) + ' L26 50 L80 100'];
+  G['S'] = [A(50, 25, 26, 25, -35, -235) + ' ' + A(50, 75, 28, 25, -90, 235, true)];
+  G['T'] = ['M50 0 L50 100', 'M14 0 L86 0'];
+  G['U'] = ['M22 0 L22 64 ' + A(50, 64, 28, 36, 180, -180, true) + ' L78 0'];
+  G['V'] = ['M16 0 L50 100 L84 0'];
+  G['W'] = ['M8 0 L29 100 L50 20 L71 100 L92 0'];
+  G['X'] = ['M20 0 L80 100', 'M80 0 L20 100'];
+  G['Y'] = ['M20 0 L50 50', 'M80 0 L50 50 L50 100'];
+  G['Z'] = ['M20 0 L80 0 L20 100 L80 100'];
+
+  /* ---------- 小写字母 ---------- */
+  var bowl = function (cx) { return A(cx, 75, 25, 25, -40, -320); };      // a d g q 的圆肚子，逆时针
+  G['a'] = [bowl(47) + ' L72 50 L72 100'];
+  G['b'] = ['M28 0 L28 100 L28 75 ' + A(53, 75, 25, 25, 180, 360, true)];
+  G['c'] = [A(50, 75, 25, 25, -45, -270)];
+  G['d'] = [bowl(47) + ' L72 0 L72 100'];
+  G['e'] = ['M25 75 L75 75 ' + A(50, 75, 25, 25, 0, -315, true)];
+  G['f'] = [A(60, 24, 16, 24, -30, -150) + ' L44 100', 'M26 50 L64 50'];
+  G['g'] = [bowl(47) + ' L72 50 L72 125 ' + A(47, 125, 25, 25, 0, 150, true)];
+  G['h'] = ['M28 0 L28 100 L28 72 ' + A(51, 72, 23, 22, 180, 180, true) + ' L74 100'];
+  G['i'] = ['M50 50 L50 100', 'M50 27 L50 28'];
+  G['j'] = ['M56 50 L56 126 ' + A(36, 126, 20, 24, 0, 150, true), 'M56 27 L56 28'];
+  G['k'] = ['M30 0 L30 100', 'M70 50 L30 78 L72 100'];
+  G['l'] = ['M50 0 L50 100'];
+  G['m'] = ['M14 50 L14 100 L14 70 ' + A(32, 70, 18, 20, 180, 180, true) + ' L50 100 L50 70 ' + A(68, 70, 18, 20, 180, 180, true) + ' L86 100'];
+  G['n'] = ['M28 50 L28 100 L28 72 ' + A(51, 72, 23, 22, 180, 180, true) + ' L74 100'];
+  G['o'] = [A(50, 75, 25, 25, -90, -360)];
+  G['p'] = ['M28 50 L28 150 L28 75 ' + A(53, 75, 25, 25, 180, 360, true)];
+  G['q'] = [bowl(47) + ' L72 50 L72 150 L84 138'];
+  G['r'] = ['M30 50 L30 100 L30 72 ' + A(52, 72, 22, 22, 180, 130, true)];
+  G['s'] = [A(50, 62.5, 18, 12.5, -35, -235) + ' ' + A(50, 87.5, 19, 12.5, -90, 235, true)];
+  G['t'] = ['M50 10 L50 100', 'M30 50 L70 50'];
+  G['u'] = ['M28 50 L28 78 ' + A(51, 78, 23, 22, 180, -180, true) + ' L74 50 L74 100'];
+  G['v'] = ['M24 50 L50 100 L76 50'];
+  G['w'] = ['M10 50 L30 100 L50 58 L70 100 L90 50'];
+  G['x'] = ['M26 50 L74 100', 'M74 50 L26 100'];
+  G['y'] = ['M26 50 L50 100', 'M74 50 L26 150'];
+  G['z'] = ['M26 50 L74 50 L26 100 L74 100'];
+
+  /* ---------- 默写时也算对的其他常见写法（只用于识别，不用于描红） ---------- */
+  var ALT = {
+    '1': [['M50 0 L50 100']],
+    'I': [['M50 0 L50 100']],
+    '4': [['M30 0 L30 62 L84 62', 'M68 0 L68 100']],
+    '9': [[A(50, 30, 26, 30, 0, -360) + ' L76 64 ' + A(50, 64, 26, 36, 0, 150, true)]],
+    'q': [[bowl(47) + ' L72 50 L72 150']],
+    'J': [['M64 0 L64 70 ' + A(42, 70, 22, 30, 0, 160, true), 'M38 0 L90 0']],
+    't': [['M50 10 L50 84 ' + A(64, 84, 14, 16, 180, -110, true), 'M30 50 L70 50']],
+    'y': [['M28 50 L28 78 ' + A(51, 78, 23, 22, 180, -180, true) + ' L74 50 L74 125 ' + A(49, 125, 25, 25, 0, 150, true)]]
+  };
+
+  /* ---------- 路径采样 ---------- */
+  var STEP = 2;   // 采样间距（字格单位）
+
+  function parsePath(d) {
+    var tok = d.match(/[MLC]|-?\d*\.?\d+/g) || [];
+    var pts = [], i = 0, cx = 0, cy = 0, cmd = '';
+    var num = function () { return parseFloat(tok[i++]); };
+    while (i < tok.length) {
+      if (/[MLC]/.test(tok[i])) cmd = tok[i++];
+      if (cmd === 'M' || cmd === 'L') {
+        cx = num(); cy = num(); pts.push({ x: cx, y: cy });
+      } else if (cmd === 'C') {
+        var x1 = num(), y1 = num(), x2 = num(), y2 = num(), x3 = num(), y3 = num();
+        for (var s = 1; s <= 20; s++) {
+          var t = s / 20, u = 1 - t;
+          pts.push({
+            x: u * u * u * cx + 3 * u * u * t * x1 + 3 * u * t * t * x2 + t * t * t * x3,
+            y: u * u * u * cy + 3 * u * u * t * y1 + 3 * u * t * t * y2 + t * t * t * y3
+          });
+        }
+        cx = x3; cy = y3;
+      } else { i++; }
+    }
+    return pts;
+  }
+
+  function polyLength(pts) {
+    var L = 0;
+    for (var i = 1; i < pts.length; i++) L += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
+    return L;
+  }
+
+  // 沿折线等距重采样，保留首尾
+  function resample(pts, spacing) {
+    var L = polyLength(pts);
+    if (L < 1e-6) return [{ x: pts[0].x, y: pts[0].y }];
+    var n = Math.max(1, Math.round(L / spacing));
+    var gap = L / n, out = [{ x: pts[0].x, y: pts[0].y }];
+    var acc = 0, next = gap;
+    for (var i = 1; i < pts.length; i++) {
+      var a = pts[i - 1], b = pts[i];
+      var seg = Math.hypot(b.x - a.x, b.y - a.y);
+      while (seg > 0 && acc + seg >= next - 1e-9 && out.length < n) {
+        var t = (next - acc) / seg;
+        out.push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+        next += gap;
+      }
+      acc += seg;
+    }
+    out.push({ x: pts[pts.length - 1].x, y: pts[pts.length - 1].y });
+    return out;
+  }
+
+  var cache = {};
+  function glyph(ch) {
+    if (cache[ch]) return cache[ch];
+    var src = G[ch];
+    if (!src) return null;
+    var minX = 1e9, maxX = -1e9, minY = 1e9, maxY = -1e9;
+    var strokes = src.map(function (d) {
+      var raw = parsePath(d);
+      var len = polyLength(raw);
+      var pts = resample(raw, STEP);
+      pts.forEach(function (p) {
+        if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
+        if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
+      });
+      // 起笔方向（给方向箭头用）
+      var k = Math.min(pts.length - 1, 4);
+      var ang = pts.length > 1 ? Math.atan2(pts[k].y - pts[0].y, pts[k].x - pts[0].x) : 0;
+      return { d: d, pts: pts, len: len, dot: len < 6, startAngle: ang };
+    });
+    cache[ch] = { ch: ch, strokes: strokes, box: { minX: minX, maxX: maxX, minY: minY, maxY: maxY } };
+    return cache[ch];
+  }
+
+  var DIGITS = '0123456789'.split('');
+  var UPPER = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+  var LOWER = 'abcdefghijklmnopqrstuvwxyz'.split('');
+
+  function kindOf(ch) {
+    if (ch >= '0' && ch <= '9') return 'num';
+    if (ch >= 'A' && ch <= 'Z') return 'upper';
+    return 'lower';
+  }
+
+  // 某个字符所有“算对”的写法，每种写法是 [[{x,y}...], ...]
+  function variants(ch) {
+    var out = [glyph(ch).strokes.map(function (s) { return s.pts; })];
+    (ALT[ch] || []).forEach(function (alt) {
+      out.push(alt.map(function (d) { return resample(parsePath(d), STEP); }));
+    });
+    return out;
+  }
+
+  root.WI = root.WI || {};
+  root.WI.Glyphs = {
+    get: glyph, variants: variants, kindOf: kindOf, resample: resample, polyLength: polyLength,
+    DIGITS: DIGITS, UPPER: UPPER, LOWER: LOWER, ALL: DIGITS.concat(UPPER, LOWER), STEP: STEP
+  };
+})(typeof window !== 'undefined' ? window : globalThis);
+
+/*
+ * 写字岛 — 判定引擎（不依赖 DOM，可在 Node 里测试）
+ *
+ * TraceSession：描红。按笔顺逐笔跟踪笔尖沿模板路径的进度。
+ * Recognizer  ：默写。把写出的笔迹和 62 个模板做点云匹配。
+ */
+(function (root) {
+  'use strict';
+  var Gl = root.WI.Glyphs;
+  var STEP = Gl.STEP;
+
+  var dist = function (a, b) { return Math.hypot(a.x - b.x, a.y - b.y); };
+  var clamp = function (v, lo, hi) { return v < lo ? lo : v > hi ? hi : v; };
+
+  var DIFFICULTY = {
+    easy: { tol: 16, label: '宽松' },
+    normal: { tol: 12.5, label: '标准' },
+    hard: { tol: 9.5, label: '严格' }
+  };
+
+  /* ================= 描红 ================= */
+
+  // 一笔里“会走两遍”的点（比如 a 的竖：先上再下）。孩子抬笔跳过这种重复段是允许的。
+  function markDoubles(pts) {
+    var n = pts.length, out = new Array(n);
+    for (var i = 0; i < n; i++) {
+      var dbl = false;
+      for (var j = 0; j < n; j++) {
+        if (Math.abs(i - j) > 8 && dist(pts[i], pts[j]) < 3.2) { dbl = true; break; }
+      }
+      out[i] = dbl;
+    }
+    return out;
+  }
+
+  function TraceSession(glyph, opts) {
+    opts = opts || {};
+    this.g = glyph;
+    this.tol = opts.tol || DIFFICULTY.normal.tol;
+    this.onStroke = opts.onStroke || function () {};
+    this.onReject = opts.onReject || function () {};
+    this.onDone = opts.onDone || function () {};
+    this.si = 0;            // 当前该写第几笔
+    this.prog = 0;          // 当前这一笔走到模板的第几个采样点
+    this.mode = 'idle';     // idle | track | wrong | after
+    this.mistakes = 0;
+    this.stats = [];        // 每一笔的 {on, off, sum}
+    this.cur = { on: 0, off: 0, sum: 0 };
+    this.ptr = null;
+    this.done = false;
+    this.result = null;
+    this._dbl = glyph.strokes.map(function (s) { return markDoubles(s.pts); });
+  }
+
+  TraceSession.prototype._near = function (st, p, prog) {
+    var ahead = Math.ceil(Math.max(18, this.tol * 1.6) / STEP);
+    var lo = Math.max(0, prog - 3), hi = Math.min(st.pts.length - 1, prog + ahead);
+    var best = 1e9, bi = prog;
+    for (var i = lo; i <= hi; i++) {
+      var d = dist(p, st.pts[i]);
+      if (d < best - 1e-6) { best = d; bi = i; }
+    }
+    return { d: best, i: bi };
+  };
+
+  TraceSession.prototype._newPtr = function (p) {
+    this.ptr = {
+      startProg: this.prog, n: 0, on: 0, lastOn: true, len: 0, last: p,
+      snap: { on: this.cur.on, off: this.cur.off, sum: this.cur.sum }, si: this.si
+    };
+  };
+
+  // 落笔。返回这个点的状态：'on' | 'wrong' | 'free'
+  TraceSession.prototype.down = function (p) {
+    this._newPtr(p);
+    if (this.done) { this.mode = 'after'; return 'free'; }
+    var st = this.g.strokes[this.si];
+    var r = this._near(st, p, this.prog);
+    if (r.d <= this.tol * 1.5) {
+      this.mode = 'track';
+      if (st.dot) { this._completeStroke(); return 'on'; }
+      return this._feed(p);
+    }
+    // 不在当前进度附近：看看是不是跳过了一段“重复走”的路径
+    var dbl = this._dbl[this.si], skipped = 0, bestJ = -1, bestD = this.tol * 1.2;
+    for (var j = this.prog + 1; j < st.pts.length; j++) {
+      if (!dbl[j]) { skipped++; if (skipped > 6) break; }
+      var d = dist(p, st.pts[j]);
+      if (d <= bestD) { bestD = d; bestJ = j; }
+    }
+    if (bestJ >= 0) {
+      this.prog = bestJ; this.ptr.startProg = this.prog;
+      this.mode = 'track';
+      return this._feed(p);
+    }
+    this.mode = 'wrong';
+    return 'wrong';
+  };
+
+  // 移动（调用方保证相邻点间距不超过 STEP）
+  TraceSession.prototype.move = function (p) {
+    if (!this.ptr) return 'free';
+    this.ptr.len += dist(p, this.ptr.last); this.ptr.last = p;
+    if (this.mode === 'track') return this._feed(p);
+    if (this.mode === 'wrong') {
+      if (!this.done && !this.ptr.rejected) {
+        var st = this.g.strokes[this.si];
+        if (dist(p, st.pts[this.prog]) <= this.tol) {   // 滑到了起点上，算数
+          this.mode = 'track';
+          if (st.dot) { this._completeStroke(); return 'on'; }
+          return this._feed(p);
+        }
+      }
+      return 'wrong';
+    }
+    if (this.mode === 'after' && !this.done) {           // 上一笔写完没抬笔，直接连到下一笔的起点
+      var nx = this.g.strokes[this.si];
+      if (!nx.dot && dist(p, nx.pts[0]) <= this.tol * 0.8) {
+        this._newPtr(p);
+        this.mode = 'track';
+        return this._feed(p);
+      }
+    }
+    return 'free';
+  };
+
+  TraceSession.prototype._feed = function (p) {
+    var st = this.g.strokes[this.si];
+    var r = this._near(st, p, this.prog);
+    this.ptr.n++;
+    if (r.d <= this.tol) {
+      this.cur.on++; this.cur.sum += r.d; this.ptr.on++; this.ptr.lastOn = true;
+      if (r.i > this.prog) this.prog = r.i;
+      var slack = Math.min(4, Math.floor(st.pts.length * 0.2));
+      if (this.prog >= st.pts.length - 1 - slack) this._completeStroke();
+      return 'on';
+    }
+    this.cur.off++; this.ptr.lastOn = false;
+    return 'off';
+  };
+
+  TraceSession.prototype._completeStroke = function () {
+    var c = this.cur, total = c.on + c.off;
+    var st = this.g.strokes[this.si];
+    if (!st.dot && total > 4 && c.on / total < 0.55) {   // 乱涂过关不算
+      this.cur = { on: 0, off: 0, sum: 0 };
+      this.prog = 0; this.mistakes++;
+      this.mode = 'wrong';
+      if (this.ptr) this.ptr.rejected = true;
+      this.onReject('messy', this.si);
+      return;
+    }
+    this.stats.push(c);
+    this.cur = { on: 0, off: 0, sum: 0 };
+    var idx = this.si;
+    this.si++; this.prog = 0; this.mode = 'after';
+    this.onStroke(idx);
+    if (this.si >= this.g.strokes.length) {
+      this.done = true;
+      this.result = this._score();
+      this.onDone(this.result);
+    }
+  };
+
+  // 抬笔。返回 {discard, reason}：discard 为真时这一段笔迹要擦掉
+  TraceSession.prototype.up = function () {
+    var ptr = this.ptr, mode = this.mode;
+    this.ptr = null; this.mode = 'idle';
+    if (!ptr) return { discard: false };
+    if (mode === 'track') {
+      if (ptr.n >= 3 && (!ptr.lastOn || ptr.on / ptr.n < 0.6)) {
+        this.prog = ptr.startProg; this.cur = ptr.snap; this.mistakes++;
+        return { discard: true, reason: 'off' };
+      }
+      if (ptr.len < 3 && this.prog === ptr.startProg) {
+        this.cur = ptr.snap;
+        return { discard: true, reason: null };
+      }
+      return { discard: false, partial: true };
+    }
+    if (mode === 'wrong') {
+      if (ptr.rejected) return { discard: true, reason: null };
+      if (ptr.len >= 8) { this.mistakes++; return { discard: true, reason: 'start' }; }
+      return { discard: true, reason: null };
+    }
+    return { discard: false };
+  };
+
+  // 这一笔被系统打断（比如手掌误触后笔尖落下）：悄悄撤销，不算错
+  TraceSession.prototype.cancel = function () {
+    var ptr = this.ptr;
+    this.ptr = null; this.mode = 'idle';
+    if (ptr && !this.done && ptr.si === this.si) { this.prog = ptr.startProg; this.cur = ptr.snap; }
+  };
+
+  TraceSession.prototype._score = function () {
+    var on = 0, off = 0, sum = 0;
+    this.stats.forEach(function (s) { on += s.on; off += s.off; sum += s.sum; });
+    var dev = on ? sum / on : 0;
+    var onFrac = on + off ? on / (on + off) : 1;
+    var devN = dev / this.tol;
+    var acc = clamp(1 - (devN - 0.1) / 0.8, 0, 1) * onFrac - 0.07 * this.mistakes;
+    acc = clamp(acc, 0.05, 1);
+    return { acc: acc, stars: acc >= 0.75 ? 3 : acc >= 0.5 ? 2 : 1, dev: dev, mistakes: this.mistakes };
+  };
+
+  /* ================= 默写识别（点云匹配） ================= */
+
+  var N = 48;
+
+  function strokeLen(pts) {
+    var L = 0;
+    for (var i = 1; i < pts.length; i++) L += dist(pts[i], pts[i - 1]);
+    return L;
+  }
+
+  // strokes: [[{x,y}...], ...] → 归一化后的 N 个点
+  function toCloud(strokes) {
+    // 很短的笔画（i、j 的点）换成一小段竖线，保证它在点云里有分量
+    var ss = strokes.filter(function (s) { return s.length > 0; }).map(function (s) {
+      if (strokeLen(s) >= 8) return s;
+      var cx = 0, cy = 0;
+      s.forEach(function (p) { cx += p.x; cy += p.y; });
+      cx /= s.length; cy /= s.length;
+      return [{ x: cx, y: cy - 4 }, { x: cx, y: cy + 4 }];
+    });
+    if (!ss.length) return null;
+    var total = 0;
+    var lens = ss.map(function (s) { var l = strokeLen(s); total += l; return l; });
+    var ks = lens.map(function (l) { return Math.max(2, Math.round(N * l / total)); });
+    var sumK = 0, big = 0;
+    ks.forEach(function (k, i) { sumK += k; if (lens[i] > lens[big]) big = i; });
+    ks[big] = Math.max(2, ks[big] + N - sumK);
+    var pts = [];
+    ss.forEach(function (s, i) {
+      var rs = Gl.resample(s, lens[i] / (ks[i] - 1));
+      for (var j = 0; j < rs.length; j++) pts.push(rs[j]);
+    });
+    if (pts.length > N) pts.length = N;
+    while (pts.length < N) pts.push({ x: pts[pts.length - 1].x, y: pts[pts.length - 1].y });
+    var minX = 1e9, maxX = -1e9, minY = 1e9, maxY = -1e9, cx2 = 0, cy2 = 0;
+    pts.forEach(function (p) {
+      if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
+      if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
+      cx2 += p.x; cy2 += p.y;
+    });
+    cx2 /= pts.length; cy2 /= pts.length;
+    var sc = Math.max(maxX - minX, maxY - minY) || 1;
+    return {
+      pts: pts.map(function (p) { return { x: (p.x - cx2) / sc, y: (p.y - cy2) / sc }; }),
+      box: { minX: minX, maxX: maxX, minY: minY, maxY: maxY }
+    };
+  }
+
+  function cloudDistance(a, b, start) {
+    var n = a.length, used = new Array(n), sum = 0, i = start;
+    do {
+      var min = 1e9, idx = -1;
+      for (var j = 0; j < n; j++) {
+        if (used[j]) continue;
+        var dx = a[i].x - b[j].x, dy = a[i].y - b[j].y, d = dx * dx + dy * dy;
+        if (d < min) { min = d; idx = j; }
+      }
+      used[idx] = true;
+      sum += (1 - ((i - start + n) % n) / n) * Math.sqrt(min);
+      i = (i + 1) % n;
+    } while (i !== start);
+    return sum;
+  }
+
+  function cloudMatch(a, b) {
+    var n = a.length, step = Math.floor(Math.sqrt(n)), min = 1e9;
+    for (var i = 0; i < n; i += step) {
+      min = Math.min(min, cloudDistance(a, b, i), cloudDistance(b, a, i));
+    }
+    return min / ((n + 1) / 2);
+  }
+
+  // 另一个指标：两边各自“最不贴合的 15% 的点”离对方有多远（能看出多一笔、少一笔）
+  function farPart(p, q) {
+    var ds = [];
+    for (var i = 0; i < p.length; i++) {
+      var m = 1e9;
+      for (var j = 0; j < q.length; j++) {
+        var dx = p[i].x - q[j].x, dy = p[i].y - q[j].y, d = dx * dx + dy * dy;
+        if (d < m) m = d;
+      }
+      ds.push(Math.sqrt(m));
+    }
+    ds.sort(function (x, y) { return y - x; });
+    var k = Math.max(1, Math.round(ds.length * 0.15)), s = 0;
+    for (var t = 0; t < k; t++) s += ds[t];
+    return s / k;
+  }
+
+  function shapeScore(a, b) {
+    return cloudMatch(a, b) + Math.max(farPart(a, b), farPart(b, a));
+  }
+
+  // 形状一样、只靠大小和占格区分的字符：互相不算“写错”
+  var GROUPS = ['cC', 'oO0', 'sS', 'vV', 'wW', 'xX', 'zZ', 'uU', 'kK', 'pP', '1lI'];
+  function mates(a, b) {
+    for (var i = 0; i < GROUPS.length; i++) {
+      if (GROUPS[i].indexOf(a) >= 0 && GROUPS[i].indexOf(b) >= 0) return true;
+    }
+    return false;
+  }
+
+  var templates = null;
+  function getTemplates() {
+    if (templates) return templates;
+    templates = Gl.ALL.map(function (ch) {
+      return {
+        ch: ch, box: Gl.get(ch).box,
+        clouds: Gl.variants(ch).map(function (v) { return toCloud(v).pts; })
+      };
+    });
+    return templates;
+  }
+
+  var REC = { pass: 0.42, ratio: 1.3, slack: 0.02, good: 0.16, fine: 0.26 };
+
+  /*
+   * 判断 strokes 是不是写的 target。
+   * 返回 {ok, stars, acc, looksLike, place: 'ok'|'small'|'big'|'high'|'low', reason}
+   */
+  // 把笔迹和所有模板比一遍（每个字符取它各种写法里最像的那个分数，越小越像）
+  function scoreAll(strokes) {
+    var c = toCloud(strokes);
+    if (!c) return null;
+    var T = getTemplates(), scores = {};
+    for (var i = 0; i < T.length; i++) {
+      var s = 1e9;
+      for (var v = 0; v < T[i].clouds.length; v++) s = Math.min(s, shapeScore(c.pts, T[i].clouds[v]));
+      scores[T[i].ch] = s;
+    }
+    return { box: c.box, scores: scores };
+  }
+
+  function recognize(strokes, target, pre) {
+    var sa = pre || scoreAll(strokes);
+    if (!sa) return { ok: false, reason: 'empty' };
+    var c = sa;
+    var w = c.box.maxX - c.box.minX, h = c.box.maxY - c.box.minY;
+    if (Math.max(w, h) < 10) return { ok: false, reason: 'tiny' };
+    var tpl = Gl.get(target), sT = sa.scores[target], best = 1e9, bestCh = null;
+    for (var ch in sa.scores) {
+      if (ch !== target && !mates(ch, target) && sa.scores[ch] < best) { best = sa.scores[ch]; bestCh = ch; }
+    }
+    var ok = sT <= REC.pass && sT <= best * REC.ratio + REC.slack;
+    var res = { ok: ok, s: sT, best: best, bestCh: bestCh };
+    if (!ok) {
+      res.reason = 'shape';
+      if (best < sT * 0.75 && best < REC.fine) res.looksLike = bestCh;
+      return res;
+    }
+    // 占格：顶和底离标准位置差多少
+    var dTop = c.box.minY - tpl.box.minY, dBot = c.box.maxY - tpl.box.maxY;
+    var th = tpl.box.maxY - tpl.box.minY;
+    var off = Math.max(Math.abs(dTop), Math.abs(dBot));
+    var place = 'ok';
+    if (off > 16) {
+      if (h < th * 0.72) place = 'small';
+      else if (h > th * 1.3) place = 'big';
+      else place = (dTop + dBot) / 2 < 0 ? 'high' : 'low';
+    }
+    res.place = place; res.off = off;
+    var shapeQ = clamp(1 - (sT - 0.1) / (REC.pass - 0.1), 0, 1);
+    var placeQ = clamp(1 - (off - 6) / 34, 0, 1);
+    res.acc = clamp(0.25 + 0.5 * shapeQ + 0.25 * placeQ, 0.05, 1);
+    res.stars = (sT <= REC.good && off <= 16) ? 3 : (sT <= REC.fine && off <= 28) ? 2 : 1;
+    return res;
+  }
+
+  root.WI.Engine = {
+    TraceSession: TraceSession, recognize: recognize, scoreAll: scoreAll, toCloud: toCloud, shapeScore: shapeScore, mates: mates,
+    DIFFICULTY: DIFFICULTY, REC: REC
+  };
+})(typeof window !== 'undefined' ? window : globalThis);
+
+/*
+ * 写字岛 — 存档、关卡、奖励、商店、成就
+ */
+(function (root) {
+  'use strict';
+  var Gl = root.WI.Glyphs;
+  var KEY = 'writing-island-v1';
+
+  /* ---------- 关卡 ---------- */
+  function chunk(arr, n) {
+    var out = [];
+    for (var i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n));
+    return out;
+  }
+  var WORLDS = [
+    { id: 'num', name: '数字岛', short: '数字', sample: '123', range: '0 – 9', chars: Gl.DIGITS, groups: [['1', '2', '3'], ['4', '5', '6'], ['7', '8', '9', '0']], bossN: 10 },
+    { id: 'upper', name: '大写字母岛', short: '大写', sample: 'ABC', range: 'A – Z', chars: Gl.UPPER, groups: chunk(Gl.UPPER, 3), bossN: 8 },
+    { id: 'lower', name: '小写字母岛', short: '小写', sample: 'abc', range: 'a – z', chars: Gl.LOWER, groups: chunk(Gl.LOWER, 3), bossN: 8 }
+  ];
+  var LEVELS = {};
+  WORLDS.forEach(function (w) {
+    w.levels = w.groups.map(function (chars, i) {
+      return { id: w.id + '-' + (i + 1), world: w.id, n: i + 1, chars: chars, boss: false };
+    });
+    w.levels.push({ id: w.id + '-boss', world: w.id, n: w.levels.length + 1, chars: w.chars, boss: true, bossN: w.bossN });
+    w.levels.forEach(function (l) { LEVELS[l.id] = l; });
+  });
+  function world(id) { return WORLDS.filter(function (w) { return w.id === id; })[0]; }
+
+  var MODES = ['trace', 'dots', 'write'];
+  var MODE_NAME = { trace: '描红', dots: '虚线', write: '自己写' };
+
+  /* ---------- 商店 ---------- */
+  var SHOP = {
+    pen: [
+      { id: 'ink', name: '蓝黑墨水', price: 0, colors: ['#22335C'] },
+      { id: 'cherry', name: '樱桃红', price: 30, colors: ['#E0394A'] },
+      { id: 'leaf', name: '青草绿', price: 30, colors: ['#17A26A'] },
+      { id: 'grape', name: '葡萄紫', price: 30, colors: ['#7A4DF0'] },
+      { id: 'orange', name: '橘子橙', price: 30, colors: ['#FF8419'] },
+      { id: 'ocean', name: '海浪笔', price: 90, colors: ['#12B5CB', '#2B7BFF', '#5B4BE8'], cycle: 70 },
+      { id: 'fire', name: '火焰笔', price: 90, colors: ['#E8322D', '#FF8A1E', '#FFC31F'], cycle: 60 },
+      { id: 'rainbow', name: '彩虹笔', price: 150, rainbow: true },
+      { id: 'candy', name: '糖果笔', price: 150, colors: ['#FF5FA2', '#35B8FF'], stripe: 9 }
+    ],
+    board: [
+      { id: 'paper', name: '练习本', price: 0 },
+      { id: 'mint', name: '护眼纸', price: 40 },
+      { id: 'chalk', name: '小黑板', price: 100 },
+      { id: 'night', name: '星空板', price: 160 }
+    ],
+    buddy: [
+      { id: 'panda', face: '🐼', name: '团团', price: 0 },
+      { id: 'rabbit', face: '🐰', name: '跳跳', price: 50 },
+      { id: 'fox', face: '🦊', name: '阿狸', price: 80 },
+      { id: 'tiger', face: '🐯', name: '虎虎', price: 120 },
+      { id: 'unicorn', face: '🦄', name: '闪闪', price: 200 },
+      { id: 'dragon', face: '🐲', name: '小龙', price: 300 }
+    ]
+  };
+  function item(type, id) {
+    return SHOP[type].filter(function (it) { return it.id === id; })[0] || SHOP[type][0];
+  }
+
+  /* ---------- 存档 ---------- */
+  function fresh() {
+    return {
+      v: 1, gems: 0, gemsEarned: 0, score: 0, plays: 0, combo: 0,
+      chars: {},      // ch → { n, s:[描红,虚线,自己写 最高星], a:[最近的准确度], t:时间戳 }
+      levels: {},     // 关卡 id → 最高星
+      days: {},       // 'YYYY-MM-DD' → { n, sec, g, goal }
+      owned: { pen: ['ink'], board: ['paper'], buddy: ['panda'] },
+      use: { pen: 'ink', board: 'paper', buddy: 'panda' },
+      set: { sound: true, voice: 'zh', diff: 'normal', size: 'm', hand: 'right', input: 'auto', goal: 12 },
+      badges: {}, updatedAt: 0
+    };
+  }
+  function normalize(s) {
+    var f = fresh();
+    if (!s || typeof s !== 'object') return f;
+    Object.keys(f).forEach(function (k) { if (s[k] === undefined || s[k] === null) s[k] = f[k]; });
+    ['pen', 'board', 'buddy'].forEach(function (k) {
+      if (!Array.isArray(s.owned[k])) s.owned[k] = f.owned[k];
+      if (!s.use[k]) s.use[k] = f.use[k];
+    });
+    Object.keys(f.set).forEach(function (k) { if (s.set[k] === undefined) s.set[k] = f.set[k]; });
+    return s;
+  }
+
+  var state = fresh();
+  var listeners = [];
+  function notify(why) { listeners.forEach(function (fn) { try { fn(why); } catch (e) {} }); }
+
+  function loadLocal() {
+    try {
+      var raw = root.localStorage && root.localStorage.getItem(KEY);
+      if (raw) state = normalize(JSON.parse(raw));
+    } catch (e) { /* 存储不可用就用空白存档 */ }
+  }
+
+  /* 云端同步：在 Claude 的 Artifact 里，每个人的进度存在自己的私有文档里，
+     这样换设备、清缓存都不会丢。其他环境（比如单独部署）只用 localStorage。 */
+  var remote = { doc: null, busy: false, dirty: false, timer: null, status: 'local' };
+  function pushRemote() {
+    if (!remote.doc) return;
+    if (remote.busy) { remote.dirty = true; return; }
+    remote.busy = true; remote.dirty = false;
+    var body;
+    try { body = JSON.parse(JSON.stringify(state)); } catch (e) { remote.busy = false; return; }
+    remote.doc.set(body).then(function () {
+      remote.busy = false;
+      if (remote.dirty) pushRemote();
+    }, function () {
+      remote.busy = false; remote.status = 'local'; remote.doc = null;   // 写不进去（比如只读访问）：本次只存本机
+      notify('sync');
+    });
+  }
+  function save() {
+    state.updatedAt = Date.now();
+    try { root.localStorage && root.localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
+    if (remote.doc) {
+      clearTimeout(remote.timer);
+      remote.timer = setTimeout(pushRemote, 1500);
+    }
+  }
+  function initRemote() {
+    var claude = root.claude;
+    if (!claude || typeof claude.use !== 'function') return;
+    Promise.all([claude.use('db'), claude.use('user')]).then(function (r) {
+      var db = r[0], user = r[1];
+      if (!db || !user) return null;
+      return user.id().then(function (uid) {
+        if (!uid) return null;
+        var doc = db.doc('data/users/' + uid + '/save');
+        return doc.get().then(function (snap) {
+          remote.doc = doc; remote.status = 'cloud';
+          var data = snap.exists ? snap.data() : null;
+          if (data && typeof data === 'object' && (data.plays || 0) > (state.plays || 0)) {
+            state = normalize(JSON.parse(JSON.stringify(data)));   // 云端的记录更多：以云端为准
+            try { root.localStorage && root.localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
+            notify('replaced');
+          } else if ((state.plays || 0) > ((data && data.plays) || 0)) {
+            pushRemote();
+          }
+          notify('sync');
+        });
+      });
+    }).catch(function () { /* 没有云端就只存本机 */ });
+  }
+
+  /* ---------- 日期 ---------- */
+  function dayKey(d) {
+    d = d || new Date();
+    var m = d.getMonth() + 1, dd = d.getDate();
+    return d.getFullYear() + '-' + (m < 10 ? '0' : '') + m + '-' + (dd < 10 ? '0' : '') + dd;
+  }
+  function today() {
+    var k = dayKey();
+    if (!state.days[k]) state.days[k] = { n: 0, sec: 0, g: 0, goal: 0 };
+    return state.days[k];
+  }
+  function lastDays(n) {
+    var out = [], d = new Date();
+    d.setHours(12, 0, 0, 0);
+    for (var i = n - 1; i >= 0; i--) {
+      var x = new Date(d.getTime() - i * 86400000), k = dayKey(x);
+      var rec = state.days[k] || { n: 0, sec: 0, g: 0 };
+      out.push({ key: k, date: x, n: rec.n || 0, sec: rec.sec || 0, g: rec.g || 0, today: i === 0 });
+    }
+    return out;
+  }
+  function streak() {
+    var d = new Date(); d.setHours(12, 0, 0, 0);
+    var n = 0, k = dayKey(d);
+    if (!(state.days[k] && state.days[k].n > 0)) d = new Date(d.getTime() - 86400000);   // 今天还没练，从昨天算
+    for (;;) {
+      k = dayKey(d);
+      if (state.days[k] && state.days[k].n > 0) { n++; d = new Date(d.getTime() - 86400000); } else break;
+    }
+    return n;
+  }
+
+  /* ---------- 字符记录 ---------- */
+  function rec(ch) { return state.chars[ch] || { n: 0, s: [0, 0, 0], a: [], t: 0 }; }
+  function bestStars(ch) { var r = rec(ch); return Math.max(r.s[0], r.s[1], r.s[2]); }
+  // 0 没练过 · 1 会描红 · 2 会写虚线 · 3 能自己写
+  function stage(ch) {
+    var r = rec(ch);
+    return r.s[2] >= 2 ? 3 : (r.s[1] > 0 || r.s[2] > 0) ? 2 : r.s[0] > 0 ? 1 : 0;
+  }
+  function avgAcc(ch) {
+    var a = rec(ch).a;
+    if (!a.length) return null;
+    var s = 0; a.forEach(function (v) { s += v; });
+    return Math.round(s / a.length);
+  }
+  function weakChars(limit) {
+    var list = [];
+    Gl.ALL.forEach(function (ch) {
+      var r = rec(ch);
+      if (r.n < 1) return;
+      var acc = avgAcc(ch);
+      if (acc !== null && (acc < 72 || bestStars(ch) < 2)) list.push({ ch: ch, acc: acc });
+    });
+    list.sort(function (x, y) { return x.acc - y.acc; });
+    return list.slice(0, limit || 6);
+  }
+  function totals() {
+    var stars = 0, learned = 0, tried = 0;
+    Gl.ALL.forEach(function (ch) {
+      stars += bestStars(ch);
+      if (stage(ch) === 3) learned++;
+      if (rec(ch).n > 0) tried++;
+    });
+    var sec = 0;
+    Object.keys(state.days).forEach(function (k) { sec += state.days[k].sec || 0; });
+    return { stars: stars, maxStars: Gl.ALL.length * 3, learned: learned, tried: tried, all: Gl.ALL.length, sec: sec };
+  }
+
+  /* ---------- 等级称号 ---------- */
+  var TITLES = [[1, '写字新手'], [3, '握笔学徒'], [5, '写字能手'], [8, '书写达人'], [12, '写字大师']];
+  function rank() {
+    var lv = 1, need = 300, left = state.score;
+    while (left >= need) { left -= need; lv++; need = 300 + 150 * (lv - 1); }
+    var title = TITLES[0][1];
+    TITLES.forEach(function (t) { if (lv >= t[0]) title = t[1]; });
+    return { lv: lv, title: title, cur: left, need: need };
+  }
+
+  /* ---------- 成就 ---------- */
+  function worldCleared(id) {
+    return world(id).levels.every(function (l) { return (state.levels[l.id] || 0) > 0; });
+  }
+  function count(fn) { var n = 0; Gl.ALL.forEach(function (ch) { if (fn(ch)) n++; }); return n; }
+  var BADGES = [
+    { id: 'first', name: '第一笔', desc: '写完第一个字', test: function () { return state.plays >= 1; } },
+    { id: 'p100', name: '百字小将', desc: '累计写满 100 个字', test: function () { return state.plays >= 100; } },
+    { id: 'p500', name: '五百字英雄', desc: '累计写满 500 个字', test: function () { return state.plays >= 500; } },
+    { id: 's10', name: '三星收集者', desc: '10 个字拿到三颗星', test: function () { return count(function (c) { return bestStars(c) === 3; }) >= 10; } },
+    { id: 'sAll', name: '满天星', desc: '62 个字全部三颗星', test: function () { return count(function (c) { return bestStars(c) === 3; }) >= 62; } },
+    { id: 'w20', name: '脱稿高手', desc: '20 个字能自己写出来', test: function () { return count(function (c) { return stage(c) === 3; }) >= 20; } },
+    { id: 'num', name: '数字岛岛主', desc: '通关数字岛', test: function () { return worldCleared('num'); } },
+    { id: 'upper', name: '大写岛岛主', desc: '通关大写字母岛', test: function () { return worldCleared('upper'); } },
+    { id: 'lower', name: '小写岛岛主', desc: '通关小写字母岛', test: function () { return worldCleared('lower'); } },
+    { id: 'd3', name: '坚持 3 天', desc: '连续 3 天来练字', test: function () { return streak() >= 3; } },
+    { id: 'd7', name: '坚持一周', desc: '连续 7 天来练字', test: function () { return streak() >= 7; } },
+    { id: 'g200', name: '宝石收藏家', desc: '累计获得 200 颗宝石', test: function () { return state.gemsEarned >= 200; } }
+  ];
+  function checkBadges() {
+    var got = [];
+    BADGES.forEach(function (b) {
+      if (!state.badges[b.id] && b.test()) { state.badges[b.id] = Date.now(); got.push(b); }
+    });
+    return got;
+  }
+
+  function addGems(n) {
+    state.gems += n; state.gemsEarned += n;
+    today().g += n;
+  }
+
+  /*
+   * 记一次书写。task: {ch, mode, stars, acc(0..1), secs, assisted}
+   * 返回 {gems, score, record(刷新最高星), goal(今天目标刚达成), badges[]}
+   */
+  function recordTask(t) {
+    var mi = MODES.indexOf(t.mode);
+    var r = state.chars[t.ch] || (state.chars[t.ch] = { n: 0, s: [0, 0, 0], a: [], t: 0 });
+    r.n++; r.t = Date.now();
+    r.a.push(Math.round(t.acc * 100));
+    if (r.a.length > 12) r.a.shift();
+    var out = { gems: t.stars, score: 0, record: false, goal: false, badges: [] };
+    if (t.stars > r.s[mi]) {
+      if (t.stars === 3) { out.gems += 2; out.record = true; }
+      r.s[mi] = t.stars;
+    }
+    state.combo = t.stars === 3 ? state.combo + 1 : 0;
+    out.combo = state.combo;
+    out.score = 50 + Math.round(t.acc * 100) + (t.stars === 3 ? 50 : 0) + 10 * Math.min(Math.max(state.combo - 1, 0), 5);
+    state.score += out.score;
+    state.plays++;
+    var d = today();
+    d.n++; d.sec += Math.round(Math.min(Math.max(t.secs || 0, 1), 120));
+    addGems(out.gems);
+    if (!d.goal && d.n >= state.set.goal) { d.goal = 1; addGems(10); out.goal = true; }
+    out.badges = checkBadges();
+    trimDays();
+    save();
+    return out;
+  }
+
+  function recordLevel(id, stars, perfect) {
+    var first = !(state.levels[id] > 0);
+    var bonus = (first ? 5 : 2) + (perfect ? 10 : 0);
+    if (stars > (state.levels[id] || 0)) state.levels[id] = stars;
+    addGems(bonus);
+    var badges = checkBadges();
+    save();
+    return { gems: bonus, first: first, badges: badges };
+  }
+
+  function trimDays() {
+    var keys = Object.keys(state.days).sort();
+    while (keys.length > 120) delete state.days[keys.shift()];
+  }
+
+  function levelUnlocked(l) {
+    var w = world(l.world), i = w.levels.indexOf(l);
+    return i === 0 || (state.levels[w.levels[i - 1].id] || 0) > 0;
+  }
+  function worldProgress(id) {
+    var w = world(id), done = 0, stars = 0;
+    w.levels.forEach(function (l) { var s = state.levels[l.id] || 0; if (s > 0) done++; stars += s; });
+    return { done: done, total: w.levels.length, stars: stars, maxStars: w.levels.length * 3 };
+  }
+  function nextLevel(id) {
+    var w = world(id);
+    for (var i = 0; i < w.levels.length; i++) if (!(state.levels[w.levels[i].id] > 0)) return w.levels[i];
+    return null;
+  }
+
+  function buy(type, id) {
+    var it = item(type, id);
+    if (state.owned[type].indexOf(id) >= 0) return 'owned';
+    if (state.gems < it.price) return 'poor';
+    state.gems -= it.price;
+    state.owned[type].push(id);
+    state.use[type] = id;
+    save();
+    return 'ok';
+  }
+  function equip(type, id) {
+    if (state.owned[type].indexOf(id) < 0) return false;
+    state.use[type] = id; save();
+    return true;
+  }
+  function setOpt(k, v) { state.set[k] = v; save(); }
+  function reset() {
+    var keep = state.set;
+    state = fresh(); state.set = keep;
+    save();
+    if (remote.doc) { clearTimeout(remote.timer); pushRemote(); }
+  }
+
+  loadLocal();
+
+  root.WI.Store = {
+    get s() { return state; },
+    WORLDS: WORLDS, LEVELS: LEVELS, MODES: MODES, MODE_NAME: MODE_NAME, SHOP: SHOP, BADGES: BADGES,
+    world: world, item: item, save: save, initRemote: initRemote,
+    on: function (fn) { listeners.push(fn); },
+    get syncStatus() { return remote.status; },
+    today: today, lastDays: lastDays, streak: streak,
+    rec: rec, bestStars: bestStars, stage: stage, avgAcc: avgAcc, weakChars: weakChars, totals: totals,
+    rank: rank, recordTask: recordTask, recordLevel: recordLevel,
+    levelUnlocked: levelUnlocked, worldProgress: worldProgress, nextLevel: nextLevel,
+    buy: buy, equip: equip, setOpt: setOpt, reset: reset
+  };
+})(typeof window !== 'undefined' ? window : globalThis);
+
+/*
+ * 写字岛 — 音效（WebAudio 合成，不需要音频文件）和朗读
+ */
+(function (root) {
+  'use strict';
+  var Store = root.WI.Store;
+  var ctx = null, primed = false;
+
+  function ac() {
+    if (!Store.s.set.sound) return null;
+    try {
+      if (!ctx) {
+        var C = root.AudioContext || root.webkitAudioContext;
+        if (!C) return null;
+        ctx = new C();
+      }
+      if (ctx.state === 'suspended') ctx.resume();
+      return ctx;
+    } catch (e) { return null; }
+  }
+
+  // 一个音：频率、起始时间（秒）、时长、音色、音量
+  function tone(freq, at, dur, type, vol) {
+    var c = ac();
+    if (!c) return;
+    try {
+      var o = c.createOscillator(), g = c.createGain(), t = c.currentTime + (at || 0);
+      o.type = type || 'sine';
+      o.frequency.setValueAtTime(freq, t);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(vol || 0.16, t + 0.012);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.connect(g); g.connect(c.destination);
+      o.start(t); o.stop(t + dur + 0.03);
+    } catch (e) {}
+  }
+
+  var SCALE = [523.25, 587.33, 659.25, 783.99, 880, 1046.5, 1174.66, 1318.5];   // 五声音阶，怎么按都好听
+
+  var Sfx = {
+    // 第一次点击时调用：iPad 上声音和朗读都要在用户手势里“解锁”一次
+    unlock: function () {
+      ac();
+      if (primed) return;
+      primed = true;
+      try {
+        if (root.speechSynthesis && root.SpeechSynthesisUtterance) {
+          var u = new root.SpeechSynthesisUtterance(' ');
+          u.volume = 0;
+          root.speechSynthesis.speak(u);
+        }
+      } catch (e) {}
+    },
+    tap: function () { tone(660, 0, 0.06, 'triangle', 0.07); },
+    stroke: function (i) { tone(SCALE[Math.min(i, SCALE.length - 1)], 0, 0.16, 'triangle', 0.14); },
+    oops: function () { tone(196, 0, 0.16, 'sine', 0.16); tone(155.56, 0.09, 0.2, 'sine', 0.14); },
+    star: function (i) { tone(SCALE[2 + i * 2], 0, 0.22, 'triangle', 0.15); tone(SCALE[2 + i * 2] * 2, 0.02, 0.18, 'sine', 0.05); },
+    gem: function () { tone(1568, 0, 0.09, 'sine', 0.09); tone(2093, 0.07, 0.14, 'sine', 0.08); },
+    win: function () {
+      [523.25, 659.25, 783.99, 1046.5, 1318.5].forEach(function (f, i) { tone(f, i * 0.11, 0.3, 'triangle', 0.15); });
+      tone(1046.5, 0.6, 0.5, 'sine', 0.1);
+    },
+    buy: function () { tone(880, 0, 0.1, 'square', 0.05); tone(1318.5, 0.09, 0.22, 'triangle', 0.13); }
+  };
+
+  /* ---------- 朗读 ---------- */
+  var EN_NUM = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
+  function promptText(ch, lang) {
+    var kind = root.WI.Glyphs.kindOf(ch);
+    if (lang === 'en') {
+      if (kind === 'num') return 'Write the number ' + EN_NUM[+ch];
+      return (kind === 'upper' ? 'Write capital ' : 'Write lowercase ') + ch.toUpperCase();
+    }
+    if (kind === 'num') return '写数字 ' + ch;
+    return (kind === 'upper' ? '写大写字母 ' : '写小写字母 ') + ch.toUpperCase();
+  }
+  function say(ch) {
+    var lang = Store.s.set.voice;
+    if (lang === 'off') return;
+    try {
+      var synth = root.speechSynthesis;
+      if (!synth || !root.SpeechSynthesisUtterance) return;
+      synth.cancel();
+      var u = new root.SpeechSynthesisUtterance(promptText(ch, lang));
+      u.lang = lang === 'en' ? 'en-US' : 'zh-CN';
+      u.rate = 0.9;
+      synth.speak(u);
+    } catch (e) { /* 有的环境不让朗读，没关系 */ }
+  }
+
+  root.WI.Sfx = Sfx;
+  root.WI.Voice = { say: say, promptText: promptText };
+})(typeof window !== 'undefined' ? window : globalThis);
+
+/*
+ * 写字岛 — 写字板
+ *
+ * 三层：背景 SVG（四线格 + 字帖） / 墨迹 canvas / 提示 SVG（起笔点、箭头、示范笔）。
+ * 用 Pointer Events 接 Apple Pencil：有压感，笔尖粗细会跟着变；检测到笔以后可以只认笔，防手掌误触。
+ */
+(function (root) {
+  'use strict';
+  var Gl = root.WI.Glyphs, En = root.WI.Engine;
+  var STEP = Gl.STEP;
+  var NS = 'http://www.w3.org/2000/svg';
+  var SIZE = { l: 1, m: 0.8, s: 0.6 };
+  var ST = { on: 0, off: 1, wrong: 2, free: 0 };
+
+  function el(name, attrs, parent) {
+    var e = document.createElementNS(NS, name);
+    for (var k in attrs) e.setAttribute(k, attrs[k]);
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+  function hex(c) { return [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)]; }
+  function mix(a, b, t) {
+    var x = hex(a), y = hex(b);
+    return 'rgb(' + Math.round(x[0] + (y[0] - x[0]) * t) + ',' + Math.round(x[1] + (y[1] - x[1]) * t) + ',' + Math.round(x[2] + (y[2] - x[2]) * t) + ')';
+  }
+
+  function Board(host, cb) {
+    this.host = host; this.cb = cb || {};
+    host.innerHTML = '';
+    this.bg = el('svg', { 'class': 'b-bg', 'aria-hidden': 'true' }, host);
+    this.canvas = document.createElement('canvas');
+    this.canvas.className = 'b-ink';
+    host.appendChild(this.canvas);
+    this.fx = el('svg', { 'class': 'b-fx', 'aria-hidden': 'true' }, host);
+    this.ctx = this.canvas.getContext('2d');
+    this.inks = []; this.task = null; this.sess = null; this.active = null;
+    this.locked = false; this.penSeen = false; this.demoToken = 0; this.dist = 0;
+    this.W = 0; this.H = 0; this.s = 1; this.ox = 0; this.oy = 0;
+
+    var self = this;
+    this._down = function (e) { self.onDown(e); };
+    this._move = function (e) { self.onMove(e); };
+    this._up = function (e) { self.onUp(e, false); };
+    this._cancel = function (e) { self.onUp(e, true); };
+    this._block = function (e) { e.preventDefault(); };
+    host.addEventListener('pointerdown', this._down);
+    host.addEventListener('pointermove', this._move);
+    root.addEventListener('pointerup', this._up);                            // 挂在 window 上：笔滑出写字板再抬起也能收到
+    root.addEventListener('pointercancel', this._cancel);
+    host.addEventListener('touchstart', this._block, { passive: false });   // 不让 Safari 滚动、放大、弹出菜单
+    host.addEventListener('contextmenu', this._block);
+    if (root.ResizeObserver) {
+      this.ro = new root.ResizeObserver(function () { self.layout(); });
+      this.ro.observe(host);
+    } else {
+      this._resize = function () { self.layout(); };
+      root.addEventListener('resize', this._resize);
+    }
+  }
+
+  Board.prototype.destroy = function () {
+    this.stopDemo();
+    var h = this.host;
+    h.removeEventListener('pointerdown', this._down);
+    h.removeEventListener('pointermove', this._move);
+    root.removeEventListener('pointerup', this._up);
+    root.removeEventListener('pointercancel', this._cancel);
+    h.removeEventListener('touchstart', this._block);
+    h.removeEventListener('contextmenu', this._block);
+    if (this.ro) this.ro.disconnect();
+    if (this._resize) root.removeEventListener('resize', this._resize);
+  };
+
+  /* task: {ch, mode:'trace'|'dots'|'write', tol, size, pen, input} */
+  Board.prototype.setTask = function (task) {
+    this.stopDemo();
+    this.task = task;
+    this.glyph = Gl.get(task.ch);
+    this.ghost = false;
+    this.locked = false;
+    this.reset();
+    this.layout();
+  };
+
+  Board.prototype.reset = function () {
+    var self = this;
+    this.inks = []; this.active = null; this.dist = 0;
+    this.sess = null;
+    if (this.task && this.task.mode !== 'write') {
+      this.sess = new En.TraceSession(this.glyph, {
+        tol: this.task.tol,
+        onStroke: function (i) { self.updateFill(); if (self.cb.onStroke) self.cb.onStroke(i); },
+        onReject: function (why, i) {
+          self.inks = self.inks.filter(function (k) { if (k.si === i) { k.dead = true; return false; } return true; });
+          self.redraw(); self.updateFill();
+          if (self.cb.onHint) self.cb.onHint(why);
+        },
+        onDone: function (res) { if (self.cb.onDone) self.cb.onDone(res); }
+      });
+    }
+  };
+
+  Board.prototype.clear = function () {
+    if (!this.task) return;
+    this.stopDemo();
+    this.ghost = false; this.locked = false;
+    this.reset();
+    this.drawBg(); this.redraw(); this.drawFx();
+  };
+
+  Board.prototype.lock = function () { this.locked = true; };
+
+  /* ---------- 布局 ---------- */
+  Board.prototype.layout = function () {
+    var r = this.host.getBoundingClientRect();
+    if (!r.width || !r.height) return;
+    var dpr = Math.min(root.devicePixelRatio || 1, 2.5);
+    this.W = r.width; this.H = r.height; this.dpr = dpr;
+    this.canvas.width = Math.round(r.width * dpr);
+    this.canvas.height = Math.round(r.height * dpr);
+    var f = SIZE[(this.task && this.task.size) || 'm'] || 0.8;
+    this.s = Math.min(this.H / 196, this.W / 150) * f;
+    this.ox = this.W / 2 - 50 * this.s;
+    this.oy = this.H / 2 - 75 * this.s;
+    var cs = root.getComputedStyle(this.host);
+    this.inkColor = (cs.getPropertyValue('--b-ink') || '').trim() || '#22335C';
+    this.wrongColor = (cs.getPropertyValue('--b-wrong') || '').trim() || '#F5A3B1';
+    this.bg.setAttribute('viewBox', '0 0 ' + this.W + ' ' + this.H);
+    this.fx.setAttribute('viewBox', '0 0 ' + this.W + ' ' + this.H);
+    this.drawBg(); this.redraw(); this.drawFx();
+  };
+
+  Board.prototype.tf = function () {
+    return 'translate(' + this.ox.toFixed(2) + ' ' + this.oy.toFixed(2) + ') scale(' + this.s.toFixed(4) + ')';
+  };
+
+  Board.prototype.drawBg = function () {
+    var bg = this.bg, W = this.W, self = this;
+    while (bg.firstChild) bg.removeChild(bg.firstChild);
+    if (!this.task) return;
+    // 四线三格：第三线（基线）是红色实线，第二线是虚线
+    [['l-top', 0], ['l-mid', 50], ['l-base', 100], ['l-bot', 150]].forEach(function (l) {
+      var y = (self.oy + l[1] * self.s).toFixed(1);
+      el('line', { 'class': 'b-line ' + l[0], x1: 0, x2: W, y1: y, y2: y }, bg);
+    });
+    var g = el('g', { transform: this.tf() }, bg);
+    var mode = this.task.mode, strokes = this.glyph.strokes;
+    this.fills = [];
+    if (mode === 'trace' || this.ghost) {
+      strokes.forEach(function (st) {
+        if (st.dot) el('circle', { 'class': self.ghost ? 'g-ghost-dot' : 'g-road-dot', cx: st.pts[0].x, cy: st.pts[0].y, r: 7.5 }, g);
+        else el('path', { 'class': self.ghost ? 'g-ghost' : 'g-road', d: st.d }, g);
+      });
+    }
+    if (mode === 'trace') {
+      strokes.forEach(function (st) {
+        var f;
+        if (st.dot) f = el('circle', { 'class': 'g-fill-dot', cx: st.pts[0].x, cy: st.pts[0].y, r: 7.5 }, g);
+        else f = el('path', { 'class': 'g-fill', d: st.d, pathLength: 100, 'stroke-dasharray': 100, 'stroke-dashoffset': 100 }, g);
+        self.fills.push(f);
+      });
+      strokes.forEach(function (st) { if (!st.dot) el('path', { 'class': 'g-dash', d: st.d }, g); });
+    } else if (mode === 'dots') {
+      strokes.forEach(function (st) {
+        if (st.dot) el('circle', { 'class': 'g-dots-dot', cx: st.pts[0].x, cy: st.pts[0].y, r: 6 }, g);
+        else el('path', { 'class': 'g-dots', d: st.d }, g);
+      });
+    }
+    this.updateFill();
+  };
+
+  Board.prototype.updateFill = function () {
+    if (!this.sess || !this.fills || !this.fills.length) return;
+    var s = this.sess, strokes = this.glyph.strokes;
+    for (var i = 0; i < this.fills.length; i++) {
+      var f = this.fills[i], st = strokes[i];
+      if (st.dot) { f.style.opacity = i < s.si ? 1 : 0; continue; }
+      var frac = i < s.si ? 1 : i === s.si ? s.prog / (st.pts.length - 1) : 0;
+      f.setAttribute('stroke-dashoffset', (100 * (1 - frac)).toFixed(1));
+      f.style.opacity = frac > 0 ? 1 : 0;      // 避免圆头在起点漏出一个小点
+    }
+  };
+
+  /* ---------- 起笔点、笔顺数字、方向箭头 ---------- */
+  Board.prototype.drawFx = function () {
+    var fx = this.fx, self = this;
+    if (this.demoToken && this.demoLayer) return;          // 示范动画进行中，先不动
+    while (fx.firstChild) fx.removeChild(fx.firstChild);
+    if (!this.task || !this.sess || this.sess.done) return;
+    var s = this.sess, strokes = this.glyph.strokes;
+    var R = Math.max(11, Math.min(21, this.s * 6.5));
+    var X = function (p) { return self.ox + p.x * self.s; }, Y = function (p) { return self.oy + p.y * self.s; };
+    var cur = strokes[s.si], p0 = cur.pts[s.prog];
+    // 后面几笔的小号码
+    var placed = [{ x: X(cur.pts[0]), y: Y(cur.pts[0]) }];
+    for (var i = s.si + 1; i < strokes.length; i++) {
+      var q = { x: X(strokes[i].pts[0]), y: Y(strokes[i].pts[0]) };
+      for (var k = 0; k < placed.length; k++) {
+        if (Math.hypot(q.x - placed[k].x, q.y - placed[k].y) < R * 1.5) { q.x += R * 1.75; q.y -= R * 0.35; k = -1; }
+      }
+      placed.push(q);
+      var g2 = el('g', { 'class': 'fx-next' }, fx);
+      el('circle', { cx: q.x, cy: q.y, r: R * 0.62 }, g2);
+      el('text', { x: q.x, y: q.y, 'font-size': R * 0.78, dy: '0.36em' }, g2).textContent = i + 1;
+    }
+    // 方向箭头
+    if (!cur.dot && cur.pts.length > 10 && this.task.mode !== 'write') {
+      var a = Math.min(cur.pts.length - 3, s.prog + Math.round(15 / STEP));
+      var pa = cur.pts[Math.max(0, a - 2)], pb = cur.pts[Math.min(cur.pts.length - 1, a + 2)];
+      var ang = Math.atan2(pb.y - pa.y, pb.x - pa.x) * 180 / Math.PI;
+      var ar = R * 0.6;
+      el('path', {
+        'class': 'fx-arrow', d: 'M' + (-ar) + ' ' + (-ar) + ' L' + ar + ' 0 L' + (-ar) + ' ' + ar,
+        transform: 'translate(' + X(cur.pts[a]).toFixed(1) + ' ' + Y(cur.pts[a]).toFixed(1) + ') rotate(' + ang.toFixed(1) + ')'
+      }, fx);
+    }
+    // 当前起笔点（写到一半抬笔时，它会移到“接着写”的位置）
+    var g = el('g', { 'class': 'fx-start', transform: 'translate(' + X(p0).toFixed(1) + ' ' + Y(p0).toFixed(1) + ')' }, fx);
+    el('circle', { 'class': 'fx-pulse', r: R }, g);
+    el('circle', { 'class': 'fx-dot', r: R * (s.prog > 0 ? 0.6 : 1) }, g);
+    if (s.prog === 0) el('text', { 'font-size': R * 1.15, dy: '0.36em' }, g).textContent = s.si + 1;
+  };
+
+  /* ---------- 示范动画 ---------- */
+  Board.prototype.stopDemo = function () {
+    if (!this.demoToken) return;
+    this.demoToken = 0;
+    if (this.demoLayer && this.demoLayer.parentNode) this.demoLayer.parentNode.removeChild(this.demoLayer);
+    this.demoLayer = null;
+    this.drawFx();
+  };
+  Board.prototype.demo = function () {
+    if (!this.task || !this.W) return;
+    this.stopDemo();
+    var self = this, token = (this.demoToken = Date.now() + Math.random());
+    var fx = this.fx;
+    while (fx.firstChild) fx.removeChild(fx.firstChild);
+    var layer = (this.demoLayer = el('g', { 'class': 'demo', transform: this.tf() }, fx));
+    var strokes = this.glyph.strokes, i = 0;
+    var pen = el('circle', { 'class': 'demo-pen', r: 6.5, cx: strokes[0].pts[0].x, cy: strokes[0].pts[0].y }, layer);
+    function next() {
+      if (self.demoToken !== token) return;
+      if (i >= strokes.length) { setTimeout(function () { if (self.demoToken === token) self.stopDemo(); }, 650); return; }
+      var st = strokes[i], t0 = null, dur = Math.max(420, st.len / 85 * 1000);
+      var path = st.dot
+        ? el('circle', { 'class': 'demo-dot', cx: st.pts[0].x, cy: st.pts[0].y, r: 0 }, layer)
+        : el('path', { 'class': 'demo-path', d: st.d, pathLength: 100, 'stroke-dasharray': 100, 'stroke-dashoffset': 100 }, layer);
+      layer.appendChild(pen);
+      function frame(t) {
+        if (self.demoToken !== token) return;
+        if (t0 === null) t0 = t;
+        var f = Math.min(1, (t - t0) / dur);
+        var p = st.pts[Math.round(f * (st.pts.length - 1))];
+        pen.setAttribute('cx', p.x); pen.setAttribute('cy', p.y);
+        if (st.dot) path.setAttribute('r', 7.5 * f);
+        else path.setAttribute('stroke-dashoffset', (100 * (1 - f)).toFixed(1));
+        if (f < 1) root.requestAnimationFrame(frame);
+        else { i++; setTimeout(next, 240); }
+      }
+      root.requestAnimationFrame(frame);
+    }
+    setTimeout(next, 250);
+  };
+
+  /* ---------- 墨迹 ---------- */
+  Board.prototype.color = function (pt) {
+    if (pt.st) return this.wrongColor;
+    var pen = this.task.pen || {};
+    if (pen.rainbow) return 'hsl(' + Math.round((pt.d * 2.4) % 360) + ',86%,54%)';
+    if (pen.stripe) return pen.colors[Math.floor(pt.d / pen.stripe) % pen.colors.length];
+    if (pen.cycle) {
+      var n = pen.colors.length, t = (pt.d / pen.cycle) % n, a = Math.floor(t);
+      return mix(pen.colors[a], pen.colors[(a + 1) % n], t - a);
+    }
+    return pen.id === 'ink' || !pen.colors ? this.inkColor : pen.colors[0];
+  };
+  Board.prototype.base = function () { return Math.max(3, this.s * 5.4); };
+
+  // 画出以第 i 个点结尾的那一小段（用中点做二次曲线，线条更圆滑）
+  Board.prototype.drawSeg = function (ink, i, last) {
+    var c = this.ctx, p = ink.pts, s = this.s, ox = this.ox, oy = this.oy;
+    var b = p[i];
+    if (p.length === 1) {
+      c.beginPath(); c.fillStyle = this.color(b);
+      c.arc(ox + b.x * s, oy + b.y * s, this.base() * b.w * 0.55, 0, 6.2832); c.fill();
+      return;
+    }
+    if (i < 1) return;
+    var a = p[i - 1];
+    var m1x = i >= 2 ? (p[i - 2].x + a.x) / 2 : a.x, m1y = i >= 2 ? (p[i - 2].y + a.y) / 2 : a.y;
+    var m2x = last ? b.x : (a.x + b.x) / 2, m2y = last ? b.y : (a.y + b.y) / 2;
+    c.beginPath();
+    c.moveTo(ox + m1x * s, oy + m1y * s);
+    c.quadraticCurveTo(ox + a.x * s, oy + a.y * s, ox + m2x * s, oy + m2y * s);
+    c.lineWidth = this.base() * (a.w + b.w) / 2;
+    c.strokeStyle = this.color(b);
+    c.stroke();
+  };
+
+  Board.prototype.redraw = function () {
+    var c = this.ctx;
+    if (!this.W) return;
+    c.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    c.clearRect(0, 0, this.W, this.H);
+    c.lineCap = 'round'; c.lineJoin = 'round';
+    for (var k = 0; k < this.inks.length; k++) {
+      var ink = this.inks[k], n = ink.pts.length;
+      if (n === 1) { this.drawSeg(ink, 0); continue; }
+      for (var i = 1; i < n; i++) this.drawSeg(ink, i, false);
+      if (n > 1 && ink !== (this.active && this.active.ink)) this.drawTail(ink);
+    }
+  };
+  Board.prototype.drawTail = function (ink) {
+    var p = ink.pts, n = p.length, c = this.ctx, s = this.s;
+    if (n < 2) return;
+    var a = p[n - 2], b = p[n - 1];
+    c.beginPath();
+    c.moveTo(this.ox + (a.x + b.x) / 2 * s, this.oy + (a.y + b.y) / 2 * s);
+    c.lineTo(this.ox + b.x * s, this.oy + b.y * s);
+    c.lineWidth = this.base() * b.w; c.strokeStyle = this.color(b); c.stroke();
+  };
+
+  /* ---------- 输入 ---------- */
+  Board.prototype.accepts = function (e) {
+    if (e.pointerType === 'mouse') return e.button === 0;
+    if (e.pointerType === 'touch') {
+      var m = this.task.input;
+      if (m === 'pen') return false;
+      if (m === 'auto' && this.penSeen) return false;
+    }
+    return true;
+  };
+  Board.prototype.toGlyph = function (e) {
+    var r = this.host.getBoundingClientRect();
+    return { x: (e.clientX - r.left - this.ox) / this.s, y: (e.clientY - r.top - this.oy) / this.s };
+  };
+  Board.prototype.width = function (e, prev) {
+    if (e.pointerType !== 'pen' || !(e.pressure > 0)) return 1;
+    var w = Math.max(0.5, Math.min(1.4, 0.5 + e.pressure * 1.15));
+    return prev ? prev * 0.6 + w * 0.4 : w;
+  };
+
+  Board.prototype.onDown = function (e) {
+    if (!this.task || !this.W) return;
+    if (e.pointerType === 'pen' && !this.penSeen) {
+      this.penSeen = true;
+      if (this.cb.onPen) this.cb.onPen();
+    }
+    if (this.locked || !this.accepts(e)) return;
+    if (this.active) {
+      // 手掌先碰到屏幕、笔尖随后落下：丢掉手掌那一笔，改跟笔尖
+      if (e.pointerType === 'pen' && this.active.type !== 'pen') this.dropActive();
+      else return;
+    }
+    e.preventDefault();
+    try { this.host.setPointerCapture(e.pointerId); } catch (err) {}
+    this.stopDemo();
+    var p = this.toGlyph(e);
+    var ink = { pts: [], si: this.sess ? this.sess.si : 0 };
+    this.inks.push(ink);
+    this.active = { id: e.pointerId, type: e.pointerType, ink: ink, last: p, w: this.width(e, 0), si0: ink.si };
+    var st = this.sess ? this.sess.down(p) : 'on';
+    this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    this.ctx.lineCap = 'round'; this.ctx.lineJoin = 'round';
+    this.push(p, this.active.w, st);
+    this.updateFill();
+    if (this.cb.onInkStart) this.cb.onInkStart();
+  };
+
+  Board.prototype.push = function (p, w, st) {
+    var ink = this.active.ink;
+    if (ink.dead) return;
+    var prev = ink.pts[ink.pts.length - 1];
+    if (prev) this.dist += Math.hypot(p.x - prev.x, p.y - prev.y);
+    ink.pts.push({ x: p.x, y: p.y, w: w, st: ST[st] || 0, d: this.dist });
+    var n = ink.pts.length;
+    if (n === 1) this.drawSeg(ink, 0);
+    else {
+      if (n === 2) {                      // 第二个点来了：把起笔的小圆点重画成线段的一部分
+        this.drawSeg(ink, 1, false);
+      } else this.drawSeg(ink, n - 1, false);
+    }
+  };
+
+  Board.prototype.feed = function (e) {
+    var a = this.active, p = this.toGlyph(e);
+    var d = Math.hypot(p.x - a.last.x, p.y - a.last.y);
+    if (d < 0.3) return;
+    var st = 'on';
+    if (this.sess) {
+      var n = Math.max(1, Math.ceil(d / STEP));
+      for (var k = 1; k <= n; k++) {
+        st = this.sess.move({ x: a.last.x + (p.x - a.last.x) * k / n, y: a.last.y + (p.y - a.last.y) * k / n });
+      }
+    }
+    a.w = this.width(e, a.w);
+    a.last = p;
+    this.push(p, a.w, st);
+  };
+
+  Board.prototype.onMove = function (e) {
+    var a = this.active;
+    if (!a || e.pointerId !== a.id) return;
+    e.preventDefault();
+    var list = e.getCoalescedEvents ? e.getCoalescedEvents() : null;
+    if (!list || !list.length) list = [e];
+    for (var i = 0; i < list.length; i++) this.feed(list[i]);
+    this.updateFill();
+  };
+
+  Board.prototype.dropActive = function () {
+    var a = this.active;
+    if (!a) return;
+    this.active = null;
+    if (this.sess) this.sess.cancel();
+    if (!this.sess || this.sess.si === a.si0) {
+      var i = this.inks.indexOf(a.ink);
+      if (i >= 0) this.inks.splice(i, 1);
+    }
+    this.redraw(); this.updateFill();
+  };
+
+  Board.prototype.onUp = function (e, cancelled) {
+    var a = this.active;
+    if (!a || e.pointerId !== a.id) return;
+    if (cancelled) { this.dropActive(); this.drawFx(); return; }
+    this.active = null;
+    var r = this.sess ? this.sess.up() : { discard: false };
+    if (r.discard || a.ink.dead) {
+      var i = this.inks.indexOf(a.ink);
+      if (i >= 0) this.inks.splice(i, 1);
+      this.redraw();
+      if (r.reason && this.cb.onHint) this.cb.onHint(r.reason);
+    } else {
+      this.drawTail(a.ink);
+      if (this.cb.onInk) this.cb.onInk(this.inks.length);
+    }
+    this.updateFill();
+    this.drawFx();
+  };
+
+  /* ---------- 自己写：检查 ---------- */
+  Board.prototype.hasInk = function () { return this.inks.length > 0; };
+  Board.prototype.check = function () {
+    var strokes = this.inks.map(function (k) { return k.pts; });
+    // 不带点的字符：极短的笔迹（笔尖不小心碰了一下）不参与识别
+    var hasDot = this.glyph.strokes.some(function (st) { return st.dot; });
+    if (!hasDot) {
+      var solid = strokes.filter(function (pts) {
+        var L = 0;
+        for (var i = 1; i < pts.length; i++) L += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
+        return L >= 4;
+      });
+      if (solid.length) strokes = solid;
+    }
+    return En.recognize(strokes, this.task.ch);
+  };
+  Board.prototype.showGhost = function () {
+    this.ghost = true;
+    this.drawBg();
+  };
+
+  root.WI.Board = Board;
+})(typeof window !== 'undefined' ? window : globalThis);
+
+/*
+ * 写字岛 — 界面：首页、关卡地图、练字、自由练习、成长记录、商店、设置
+ */
+(function (root) {
+  'use strict';
+  var WI = root.WI, Gl = WI.Glyphs, En = WI.Engine, Store = WI.Store, Sfx = WI.Sfx, Voice = WI.Voice, Board = WI.Board;
+  var doc = root.document;
+  var app = doc.getElementById('app'), modalRoot = doc.getElementById('modal'), toasts = doc.getElementById('toasts');
+  var $ = function (sel) { return doc.querySelector(sel); };
+  var S = function () { return Store.s; };
+
+  var screen = { name: 'home', arg: null };
+  var board = null, play = null, penSeen = false;
+  var pick = { tab: 'num', mode: 'trace' };
+  var MODE_NAME = Store.MODE_NAME;
+
+  /* ---------- 小工具 ---------- */
+  function icon(id, cls) { return '<svg class="ic ' + (cls || '') + '" aria-hidden="true"><use href="#i-' + id + '"/></svg>'; }
+  function starRow(n, cls) {
+    var h = '<span class="stars ' + (cls || '') + '" role="img" aria-label="' + n + ' 颗星">';
+    for (var i = 0; i < 3; i++) h += icon('star', i < n ? 'on' : 'off');
+    return h + '</span>';
+  }
+  // 用自己的笔画数据画字符（和写字板上的字帖是同一套字形）。rule 为真时带上四线格。
+  function glyphSvg(str, cls, rule, box) {
+    var lower = Gl.kindOf(str[0]) === 'lower', adv = lower ? 96 : 112, d = '';
+    var x0 = lower ? -4 : -6, w = adv * str.length + (lower ? 8 : 4);
+    if (rule) {
+      d += '<g class="gl-rule"><line x1="-3000" x2="3000" y1="0" y2="0"/><line class="mid" x1="-3000" x2="3000" y1="50" y2="50"/>' +
+        '<line class="base" x1="-3000" x2="3000" y1="100" y2="100"/>' + (lower ? '<line x1="-3000" x2="3000" y1="150" y2="150"/>' : '') + '</g>';
+    }
+    for (var i = 0; i < str.length; i++) {
+      d += '<g transform="translate(' + (i * adv) + ' 0)">';
+      Gl.get(str[i]).strokes.forEach(function (st) {
+        d += st.dot ? '<circle cx="' + st.pts[0].x + '" cy="' + st.pts[0].y + '" r="7.5"/>' : '<path d="' + st.d + '"/>';
+      });
+      d += '</g>';
+    }
+    return '<svg class="gl ' + (lower ? 'gl-lower ' : '') + (cls || '') + '" viewBox="' + (box || x0 + ' ' + (lower ? '-10 ' + w + ' 172' : '-14 ' + w + ' 128')) + '" role="img" aria-label="' + str + '">' + d + '</svg>';
+  }
+  function kindLabel(ch) {
+    var k = Gl.kindOf(ch);
+    return k === 'num' ? '数字' : k === 'upper' ? '大写' : '小写';
+  }
+  function timeHtml(sec) {
+    var m = Math.round(sec / 60);
+    if (m < 60) return (sec > 0 ? Math.max(1, m) : 0) + '<small> 分钟</small>';
+    return Math.floor(m / 60) + '<small> 小时 </small>' + (m % 60) + '<small> 分</small>';
+  }
+  function fmtTime(sec) {
+    var m = Math.round(sec / 60);
+    if (m < 1) return sec > 0 ? '1 分钟' : '0 分钟';
+    if (m < 60) return m + ' 分钟';
+    return Math.floor(m / 60) + ' 小时 ' + (m % 60) + ' 分';
+  }
+  function pickOne(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+  function shuffle(arr) {
+    var a = arr.slice();
+    for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)), t = a[i]; a[i] = a[j]; a[j] = t; }
+    return a;
+  }
+  var reduceMotion = root.matchMedia && root.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  function toast(html, kind) {
+    var t = doc.createElement('div');
+    t.className = 'toast ' + (kind || '');
+    t.innerHTML = html;
+    toasts.appendChild(t);
+    setTimeout(function () { t.classList.add('out'); }, 3000);
+    setTimeout(function () { if (t.parentNode) t.parentNode.removeChild(t); }, 3400);
+  }
+
+  /* ---------- 彩纸 ---------- */
+  var confettiRun = 0;
+  function confetti(amount) {
+    if (reduceMotion) return;
+    var cv = doc.getElementById('confetti'), c = cv.getContext('2d');
+    var W = (cv.width = root.innerWidth), H = (cv.height = root.innerHeight);
+    var colors = ['#FFC533', '#FF6B57', '#2B8CFF', '#23B777', '#8257F5', '#19C3D6'];
+    var ps = [], n = amount || 70, run = ++confettiRun;
+    for (var i = 0; i < n; i++) {
+      ps.push({
+        x: W / 2 + (Math.random() - 0.5) * W * 0.5, y: H * 0.42 + (Math.random() - 0.5) * 60,
+        vx: (Math.random() - 0.5) * 13, vy: -Math.random() * 13 - 4, r: 5 + Math.random() * 6,
+        a: Math.random() * 6.28, va: (Math.random() - 0.5) * 0.4, c: colors[i % colors.length]
+      });
+    }
+    var t0 = null;
+    function frame(t) {
+      if (run !== confettiRun) return;
+      if (t0 === null) t0 = t;
+      var age = (t - t0) / 1000;
+      c.clearRect(0, 0, W, H);
+      if (age > 2.2) return;
+      ps.forEach(function (p) {
+        p.vy += 0.42; p.vx *= 0.99; p.x += p.vx; p.y += p.vy; p.a += p.va;
+        c.save(); c.translate(p.x, p.y); c.rotate(p.a);
+        c.globalAlpha = Math.max(0, 1 - Math.max(0, age - 1.4) / 0.8);
+        c.fillStyle = p.c; c.fillRect(-p.r, -p.r * 0.45, p.r * 2, p.r * 0.9);
+        c.restore();
+      });
+      root.requestAnimationFrame(frame);
+    }
+    root.requestAnimationFrame(frame);
+  }
+
+  /* ---------- 弹窗 ---------- */
+  function openModal(html, cls, sticky) {
+    modalRoot.innerHTML = '<div class="modal-back" ' + (sticky ? '' : 'data-act="modal-close"') + '></div><div class="modal ' + (cls || '') + '" role="dialog" aria-modal="true">' + html + '</div>';
+    modalRoot.hidden = false;
+  }
+  function closeModal() { modalRoot.hidden = true; modalRoot.innerHTML = ''; }
+
+  /* ---------- 通用头部 ---------- */
+  function gemChip() { return '<span class="chip chip-gem" id="gemChip">' + icon('gem') + '<b>' + S().gems + '</b></span>'; }
+  function header(title, backAct, extra) {
+    return '<header class="topbar"><button class="ibtn" data-act="' + backAct + '" aria-label="返回">' + icon('back') + '</button>' +
+      '<h2 class="top-title">' + title + '</h2><div class="chips">' + (extra || '') + gemChip() + '</div></header>';
+  }
+
+  /* 练字时让屏幕保持常亮（浏览器不允许就算了） */
+  var wake = null;
+  function keepAwake(on) {
+    try {
+      if (on) {
+        if (!wake && root.navigator.wakeLock && doc.visibilityState === 'visible') {
+          root.navigator.wakeLock.request('screen').then(function (w) {
+            wake = w;
+            w.addEventListener('release', function () { if (wake === w) wake = null; });
+            if (screen.name !== 'play') keepAwake(false);
+          }, function () {});
+        }
+      } else if (wake) { var w = wake; wake = null; w.release().catch(function () {}); }
+    } catch (e) {}
+  }
+  doc.addEventListener('visibilitychange', function () { if (doc.visibilityState === 'visible' && screen.name === 'play') keepAwake(true); });
+
+  /* ---------- 导航 ---------- */
+  function go(name, arg) {
+    if (board) { board.destroy(); board = null; }
+    if (play && name !== 'play') { clearTimeout(play.auto); play = null; }
+    screen = { name: name, arg: arg || null };
+    keepAwake(name === 'play');
+    closeModal();
+    ({ home: renderHome, map: renderMap, play: renderPlay, pick: renderPick, progress: renderProgress, shop: renderShop }[name] || renderHome)(arg);
+  }
+
+  /* ================= 首页 ================= */
+  function renderHome() {
+    var st = S(), rk = Store.rank(), buddy = Store.item('buddy', st.use.buddy);
+    var day = Store.today(), goal = st.set.goal, streak = Store.streak();
+    var frac = Math.min(1, day.n / goal), left = Math.max(0, goal - day.n), C = 2 * Math.PI * 26;
+    var islands = Store.WORLDS.map(function (w) {
+      var p = Store.worldProgress(w.id), nx = Store.nextLevel(w.id);
+      return '<button class="island w-' + w.id + '" data-act="world" data-id="' + w.id + '">' +
+        '<span class="island-art">' + glyphSvg(w.sample, '', true, w.id === 'lower' ? '-26 -14 340 128' : '') + '</span>' +
+        '<span class="island-info"><span class="island-name">' + w.name + '</span>' +
+        '<span class="island-meta">' + (nx ? '第 ' + nx.n + ' 关 · 共 ' + p.total + ' 关' : '全部通关') + '</span>' +
+        '<span class="bar"><i style="width:' + Math.round(100 * p.done / p.total) + '%"></i></span>' +
+        '<span class="island-foot"><span class="island-stars">' + icon('star', 'on') + '<b>' + p.stars + '</b> / ' + p.maxStars + '</span>' +
+        '<span class="island-go">' + (p.done === 0 ? '出发' : nx ? '继续' : '再玩') + icon('next') + '</span></span></span></button>';
+    }).join('');
+    app.innerHTML =
+      '<section class="screen home">' +
+      '<header class="topbar">' +
+        '<button class="me" data-act="shop" aria-label="我的伙伴和等级"><span class="me-face">' + buddy.face + '</span>' +
+        '<span class="me-info"><span class="me-title">Lv.' + rk.lv + ' ' + rk.title + '</span>' +
+        '<span class="me-row"><span class="bar bar-xp"><i style="width:' + Math.round(100 * rk.cur / rk.need) + '%"></i></span><span class="me-score">' + st.score + ' 分</span></span></span></button>' +
+        '<div class="chips">' +
+          '<span class="chip chip-fire" title="连续练字天数">' + icon('flame') + '<b>' + streak + '</b><small>天</small></span>' + gemChip() +
+          '<button class="ibtn" data-act="settings" aria-label="设置">' + icon('set') + '</button>' +
+        '</div></header>' +
+      '<div class="scroll home-main">' +
+        '<div class="hero"><h1>写字岛</h1><p>拿起笔，去岛上闯关吧</p></div>' +
+        '<div class="islands">' + islands + '</div>' +
+        '<div class="home-row">' +
+          '<div class="goal"><svg class="ring" viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="26" class="ring-bg"/>' +
+            '<circle cx="32" cy="32" r="26" class="ring-fg" stroke-dasharray="' + C.toFixed(1) + '" stroke-dashoffset="' + (C * (1 - frac)).toFixed(1) + '" transform="rotate(-90 32 32)"/></svg>' +
+            '<span class="goal-num"><b>' + day.n + '</b>/' + goal + '</span>' +
+            '<span class="goal-text"><b>今日目标</b><span>' + (left ? '再写 ' + left + ' 个字，拿 10 颗宝石' : '今天的目标完成啦') + '</span></span></div>' +
+          '<button class="nav n-pick" data-act="pick">' + icon('pencil') + '<span>自由练习</span></button>' +
+          '<button class="nav n-prog" data-act="progress">' + icon('chart') + '<span>成长记录</span></button>' +
+          '<button class="nav n-shop" data-act="shop">' + icon('bag') + '<span>宝石商店</span></button>' +
+        '</div>' +
+      '</div></section>';
+  }
+
+  /* ================= 关卡地图 ================= */
+  function renderMap(id) {
+    var w = Store.world(id), p = Store.worldProgress(id), nx = Store.nextLevel(id);
+    var nodes = w.levels.map(function (l) {
+      var stars = S().levels[l.id] || 0, open = Store.levelUnlocked(l);
+      var cls = 'node' + (l.boss ? ' boss' : '') + (!open ? ' locked' : stars ? ' done' : '') + (nx && nx.id === l.id ? ' next' : '');
+      var face = !open ? icon('lock') : l.boss ? icon('crown') : '<b>' + l.n + '</b>';
+      return '<button class="' + cls + '" data-act="level" data-id="' + l.id + '" aria-label="第 ' + l.n + ' 关' + (open ? '' : '，还没解锁') + '">' +
+        '<span class="node-ball">' + face + '</span>' + starRow(stars, 'stars-s') +
+        '<span class="node-label">' + (l.boss ? '大挑战' : l.chars.join(' ')) + '</span></button>';
+    }).join('');
+    app.innerHTML = '<section class="screen map w-' + id + '">' +
+      header(w.name, 'home', '<span class="chip chip-star">' + icon('star', 'on') + '<b>' + p.stars + '</b><small>/' + p.maxStars + '</small></span>') +
+      '<div class="scroll map-scroll"><div class="track" id="track"><svg class="track-path" aria-hidden="true"><path id="trackPath"/></svg>' + nodes + '</div>' +
+      '<p class="map-tip">每一关都是三步：先描红，再写虚线，最后自己写。全部三颗星有额外的宝石。</p></div></section>';
+    layoutMap();
+    var nextEl = app.querySelector('.node.next');
+    if (nextEl && nextEl.scrollIntoView) nextEl.scrollIntoView({ block: 'center' });
+  }
+  function layoutMap() {
+    var track = $('#track');
+    if (!track) return;
+    var W = track.clientWidth, nodes = track.querySelectorAll('.node');
+    var cols = Math.max(2, Math.min(5, Math.floor(W / 150))), cellW = W / cols, rowH = 176, d = '';
+    for (var i = 0; i < nodes.length; i++) {
+      var r = Math.floor(i / cols), c = i % cols;
+      if (r % 2) c = cols - 1 - c;                       // 蛇形排列
+      var x = cellW * (c + 0.5), y = 62 + r * rowH + (c % 2 ? 20 : 0);
+      nodes[i].style.left = x + 'px'; nodes[i].style.top = (y - 44) + 'px';
+      d += (i ? ' L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1);
+    }
+    var h = Math.ceil(nodes.length / cols) * rowH + 24;
+    track.style.height = h + 'px';
+    var svg = track.querySelector('.track-path');
+    svg.setAttribute('viewBox', '0 0 ' + W + ' ' + h);
+    $('#trackPath').setAttribute('d', d);
+  }
+
+  function levelTasks(l) {
+    if (l.boss) return shuffle(l.chars).slice(0, l.bossN).map(function (ch) { return { ch: ch, mode: 'write' }; });
+    var out = [];
+    l.chars.forEach(function (ch) { Store.MODES.forEach(function (m) { out.push({ ch: ch, mode: m }); }); });
+    return out;
+  }
+  function startLevel(id) {
+    var l = Store.LEVELS[id];
+    if (!Store.levelUnlocked(l)) { Sfx.oops(); toast('先通过前面一关，这里就会打开'); return; }
+    startSession({ kind: 'level', level: l, tasks: levelTasks(l), back: { name: 'map', arg: l.world } });
+  }
+  function startSession(p) {
+    p.i = 0; p.best = {}; p.gems = 0; p.score = 0; p.accSum = 0; p.accN = 0;
+    play = p;
+    go('play');
+  }
+
+  /* ================= 练字 ================= */
+  var INTRO = {
+    trace: ['从 1 号圆点出发，跟着箭头走', '沿着灰色的路，慢慢写'],
+    dots: ['这次只有虚线，沿着它写', '顺着虚线走，笔顺和刚才一样'],
+    write: ['看着左边的样子，自己写出来', '格子是空的，轮到你啦']
+  };
+  var HINT = {
+    start: '要从闪亮的圆点开始写哦',
+    off: '跑出去啦，沿着线慢慢写',
+    messy: '这一笔有点乱，再来一次'
+  };
+  var CHEER = {
+    3: ['太棒了！', '完美！', '写得真漂亮！', '好厉害！'],
+    2: ['不错哦！', '很好！再稳一点就是三颗星', '写对啦！'],
+    1: ['完成啦！', '写出来了！慢一点会更好看']
+  };
+  var PLACE = {
+    small: '写得有点小，要顶到该到的线',
+    big: '写得太大了，注意不要出格',
+    high: '位置偏高了，红色的线是地面',
+    low: '位置偏低了，红色的线是地面'
+  };
+
+  function renderPlay() {
+    var st = S(), buddy = Store.item('buddy', st.use.buddy);
+    app.innerHTML =
+      '<section class="screen play hand-' + st.set.hand + '">' +
+      '<header class="topbar">' +
+        '<button class="ibtn" data-act="quit" aria-label="离开">' + icon('close') + '</button>' +
+        '<div class="pips" id="pips"></div>' +
+        '<div class="chips">' + gemChip() + '<button class="ibtn" data-act="settings" aria-label="设置">' + icon('set') + '</button></div>' +
+      '</header>' +
+      '<div class="play-body">' +
+        '<aside class="side">' +
+          '<div class="prompt"><span class="mode-tag" id="modeTag"></span>' +
+            '<div class="model" id="model"></div><div class="prompt-text" id="promptText"></div>' +
+            '<button class="ibtn ibtn-speak" data-act="speak" aria-label="再读一遍">' + icon('sound') + '</button></div>' +
+          '<div class="buddy"><span class="buddy-face">' + buddy.face + '</span><div class="bubble" id="bubble"></div></div>' +
+          '<div class="tools">' +
+            '<button class="btn btn-soft" data-act="demo">' + icon('play') + '<span>示范</span></button>' +
+            '<button class="btn btn-soft" data-act="clear">' + icon('redo') + '<span>重写</span></button>' +
+            '<button class="btn btn-go" data-act="check" id="btnCheck" hidden>' + icon('check') + '<span>写好了</span></button>' +
+          '</div>' +
+        '</aside>' +
+        '<div class="board-wrap" id="boardWrap"><div class="board" id="board" data-skin="' + st.use.board + '"></div>' +
+          '<button class="input-chip" id="inputChip" data-act="toggle-input" hidden></button>' +
+          '<div class="banner" id="banner" hidden></div></div>' +
+      '</div></section>';
+    board = new Board($('#board'), {
+      onStroke: function (i) { Sfx.stroke(i); },
+      onHint: function (why) { Sfx.oops(); say(HINT[why] || HINT.off, true); shake(); },
+      onDone: function (res) {
+        if (play.assist) finishTask(1, Math.min(res.acc, 0.5));
+        else finishTask(res.stars, res.acc);
+      },
+      onPen: function () {
+        penSeen = true;
+        if (S().set.input === 'auto') toast(icon('pencil') + '检测到 Apple Pencil，现在只认笔尖，手掌可以放心放在屏幕上');
+        inputChip();
+      }
+    });
+    board.penSeen = penSeen;
+    loadTask();
+  }
+
+  function say(text, warn) {
+    var b = $('#bubble');
+    if (!b) return;
+    b.textContent = text;
+    b.className = 'bubble' + (warn ? ' warn' : '');
+    void b.offsetWidth;                 // 重新触发弹出动画
+    b.classList.add('pop');
+  }
+  function shake() {
+    var w = $('#boardWrap');
+    if (!w || reduceMotion) return;
+    w.classList.remove('shake'); void w.offsetWidth; w.classList.add('shake');
+  }
+  function inputChip() {
+    var c = $('#inputChip');
+    if (!c) return;
+    var m = S().set.input, penOnly = m === 'pen' || (m === 'auto' && penSeen);
+    c.hidden = !(penSeen || m === 'pen');
+    c.innerHTML = penOnly ? icon('pencil') + '只认笔尖' : '手指也能写';
+    c.setAttribute('aria-label', penOnly ? '现在只认笔尖，点一下改成手指也能写' : '现在手指也能写，点一下改成只认笔尖');
+  }
+  function boardTask(mode) {
+    var st = S(), t = play.cur;
+    board.host.dataset.skin = st.use.board;
+    board.setTask({
+      ch: t.ch, mode: mode, tol: En.DIFFICULTY[st.set.diff].tol, size: st.set.size,
+      pen: Store.item('pen', st.use.pen), input: st.set.input
+    });
+  }
+  function renderPips() {
+    var n = play.tasks.length, h = '';
+    if (n > 14) h = '<span class="pip-text"><b>' + (play.i + 1) + '</b> / ' + n + '</span>';
+    else for (var i = 0; i < n; i++) h += '<i class="pip' + (play.best[i] ? ' s' + play.best[i] : '') + (i === play.i ? ' cur' : '') + '"></i>';
+    $('#pips').innerHTML = h;
+    $('#pips').setAttribute('aria-label', '第 ' + (play.i + 1) + ' 个，共 ' + n + ' 个');
+  }
+  function loadTask() {
+    var t = (play.cur = play.tasks[play.i]);
+    clearTimeout(play.auto);
+    play.fails = 0; play.assist = false; play.done = false; play.t0 = Date.now();
+    $('#banner').hidden = true;
+    var tag = $('#modeTag');
+    tag.textContent = MODE_NAME[t.mode]; tag.dataset.mode = t.mode;
+    $('#model').innerHTML = glyphSvg(t.ch, '', true);
+    $('#promptText').textContent = kindLabel(t.ch) + ' ' + t.ch;
+    $('#btnCheck').hidden = t.mode !== 'write';
+    $('.play').className = 'screen play hand-' + S().set.hand;
+    boardTask(t.mode);
+    renderPips(); inputChip();
+    say(pickOne(INTRO[t.mode]));
+    var first = t.mode === 'trace' && Store.rec(t.ch).n === 0;
+    setTimeout(function () {
+      if (!play || play.cur !== t || play.done) return;
+      Voice.say(t.ch);
+      if (first && board) board.demo();
+    }, 380);
+  }
+
+  function checkWrite() {
+    if (!play || play.done || !board) return;
+    if (!board.hasInk()) { say('先在格子里写出来', true); return; }
+    var t = play.cur, r = board.check();
+    if (r.ok) {
+      board.showGhost();
+      finishTask(r.stars, r.acc, PLACE[r.place]);
+      return;
+    }
+    play.fails++;
+    Sfx.oops(); shake();
+    if (play.fails >= 2) {
+      play.assist = true;
+      say('没关系，沿着虚线再写一遍', true);
+      $('#btnCheck').hidden = true;
+      boardTask('dots');
+      return;
+    }
+    say(r.reason === 'tiny' ? '写得太小啦，写大一点' : r.looksLike ? '这个看起来像 ' + r.looksLike + '，再想想 ' + t.ch + ' 怎么写' : '还不太像，再试一次', true);
+    setTimeout(function () { if (play && play.cur === t && !play.done && board) board.clear(); }, 1000);
+  }
+
+  function bumpGems() {
+    var chip = $('#gemChip');
+    if (!chip) return;
+    chip.querySelector('b').textContent = S().gems;
+    chip.classList.remove('bump'); void chip.offsetWidth; chip.classList.add('bump');
+  }
+
+  function finishTask(stars, acc, note) {
+    if (!play || play.done) return;
+    play.done = true;
+    board.lock();
+    var t = play.cur, secs = (Date.now() - play.t0) / 1000;
+    var rw = Store.recordTask({ ch: t.ch, mode: t.mode, stars: stars, acc: acc, secs: secs });
+    play.best[play.i] = Math.max(play.best[play.i] || 0, stars);
+    play.gems += rw.gems + (rw.goal ? 10 : 0); play.score += rw.score;
+    play.accSum += acc; play.accN++;
+    var last = play.i >= play.tasks.length - 1, auto = play.kind !== 'free';
+    var b = $('#banner');
+    b.innerHTML =
+      '<div class="banner-main"><div class="banner-stars">' + [0, 1, 2].map(function (i) {
+        return icon('star', (i < stars ? 'on' : 'off') + ' pop' + i);
+      }).join('') + '</div>' +
+      '<div class="banner-text"><b>' + pickOne(CHEER[stars]) + '</b><span>' + (note || (rw.record ? '新纪录！' : '') + '准确度 ' + Math.round(acc * 100) + '%') + '</span></div></div>' +
+      '<div class="banner-rw"><span class="rw rw-gem">' + icon('gem') + '+' + rw.gems + '</span><span class="rw rw-score">+' + rw.score + ' 分</span>' +
+        (rw.combo >= 2 ? '<span class="rw rw-combo">连击 ×' + rw.combo + '</span>' : '') + '</div>' +
+      '<div class="banner-act"><button class="btn btn-soft" data-act="again">' + icon('redo') + '<span>再写一次</span></button>' +
+      '<button class="btn btn-go' + (auto ? ' auto' : '') + '" data-act="next"><span>' + (last ? (play.kind === 'level' ? '看成绩' : '完成') : '下一个') + '</span>' + icon('next') + '</button></div>';
+    b.hidden = false;
+    for (var i = 0; i < stars; i++) (function (k) { setTimeout(function () { Sfx.star(k); }, 180 + k * 200); })(i);
+    setTimeout(function () { Sfx.gem(); bumpGems(); }, 300 + stars * 200);
+    if (stars === 3) confetti(46);
+    say(stars === 3 ? '给你三颗星！' : stars === 2 ? '两颗星，继续加油' : '完成一个，再接再厉');
+    renderPips();
+    if (rw.goal) setTimeout(function () { toast(icon('gem') + '今天的目标完成啦，奖励 10 颗宝石', 'good'); bumpGems(); }, 900);
+    rw.badges.forEach(function (bd, k) { setTimeout(function () { toast(icon('medal') + '获得成就「' + bd.name + '」', 'good'); }, 1300 + k * 500); });
+    if (auto) play.auto = setTimeout(nextTask, 2800);
+  }
+
+  function nextTask() {
+    if (!play) return;
+    clearTimeout(play.auto);
+    if (play.i >= play.tasks.length - 1) { finishSession(); return; }
+    play.i++;
+    loadTask();
+  }
+
+  function finishSession() {
+    var p = play;
+    if (p.kind !== 'level') {
+      toast(icon('check') + '练习完成，一共拿到 ' + p.gems + ' 颗宝石', 'good');
+      go(p.back.name, p.back.arg);
+      return;
+    }
+    var n = p.tasks.length, sum = 0, perfect = true;
+    for (var i = 0; i < n; i++) { var s = p.best[i] || 1; sum += s; if (s < 3) perfect = false; }
+    var avg = sum / n, stars = avg >= 2.6 ? 3 : avg >= 1.7 ? 2 : 1;
+    var r = Store.recordLevel(p.level.id, stars, perfect);
+    var w = Store.world(p.level.world), idx = w.levels.indexOf(p.level), nx = w.levels[idx + 1];
+    var buddy = Store.item('buddy', S().use.buddy);
+    openModal(
+      '<div class="result"><div class="result-face">' + buddy.face + '</div>' +
+      '<h2>' + (p.level.boss ? '大挑战成功！' : '第 ' + p.level.n + ' 关通过！') + '</h2>' +
+      '<div class="result-stars">' + [0, 1, 2].map(function (i) { return icon('star', (i < stars ? 'on' : 'off') + ' pop' + i); }).join('') + '</div>' +
+      '<div class="result-stats"><div><b>' + Math.round(100 * p.accSum / Math.max(1, p.accN)) + '%</b><span>平均准确度</span></div>' +
+      '<div><b>+' + (p.gems + r.gems) + '</b><span>宝石' + (perfect ? '（含全三星奖励）' : '') + '</span></div>' +
+      '<div><b>+' + p.score + '</b><span>分数</span></div></div>' +
+      '<div class="result-act">' +
+        '<button class="btn btn-soft" data-act="replay" data-id="' + p.level.id + '">' + icon('redo') + '<span>再玩一次</span></button>' +
+        (nx ? '<button class="btn btn-go" data-act="level" data-id="' + nx.id + '"><span>下一关</span>' + icon('next') + '</button>' : '') +
+        '<button class="btn btn-soft" data-act="to-map" data-id="' + w.id + '"><span>回地图</span></button>' +
+      '</div></div>', 'modal-result', true);
+    Sfx.win(); confetti(110);
+    r.badges.forEach(function (bd, k) { setTimeout(function () { toast(icon('medal') + '获得成就「' + bd.name + '」', 'good'); }, 900 + k * 500); });
+  }
+
+  function quit() {
+    if (!play) { go('home'); return; }
+    var back = play.back;
+    if (play.kind !== 'level' || play.i === 0) { go(back.name, back.arg); return; }
+    clearTimeout(play.auto);
+    openModal('<div class="ask"><h3>要离开这一关吗？</h3><p>写过的字都已经记下了，这一关下次要从头开始。</p>' +
+      '<div class="ask-act"><button class="btn btn-go" data-act="modal-close"><span>继续写</span></button>' +
+      '<button class="btn btn-soft" data-act="leave"><span>离开</span></button></div></div>', 'modal-ask');
+  }
+
+  /* ================= 自由练习 ================= */
+  function renderPick() {
+    var w = Store.world(pick.tab);
+    app.innerHTML = '<section class="screen pick w-' + pick.tab + '">' + header('自由练习', 'home') +
+      '<div class="pick-bar"><div class="seg" role="tablist" aria-label="选择字符">' + Store.WORLDS.map(function (x) {
+        return '<button role="tab" aria-selected="' + (x.id === pick.tab) + '" class="' + (x.id === pick.tab ? 'on' : '') + '" data-act="pick-tab" data-id="' + x.id + '">' + x.short + '</button>';
+      }).join('') + '</div><div class="seg seg-mode" role="group" aria-label="练习方式">' + Store.MODES.map(function (m) {
+        return '<button aria-pressed="' + (m === pick.mode) + '" class="' + (m === pick.mode ? 'on' : '') + '" data-act="pick-mode" data-id="' + m + '">' + MODE_NAME[m] + '</button>';
+      }).join('') + '</div></div>' +
+      '<div class="scroll"><div class="tiles">' + w.chars.map(function (ch) {
+        return '<button class="tile st' + Store.stage(ch) + '" data-act="pick-char" data-ch="' + ch + '" aria-label="练习 ' + kindLabel(ch) + ' ' + ch + '">' + glyphSvg(ch) + starRow(Store.bestStars(ch), 'stars-s') + '</button>';
+      }).join('') + '</div><p class="hint-line">点一个字开始练，写完会自动接着练下一个。</p></div></section>';
+  }
+  function startFree(ch, mode) {
+    var w = Store.world(Gl.kindOf(ch) === 'num' ? 'num' : Gl.kindOf(ch)), i = w.chars.indexOf(ch);
+    var order = w.chars.slice(i).concat(w.chars.slice(0, i));
+    startSession({ kind: 'free', tasks: order.map(function (c) { return { ch: c, mode: mode }; }), back: { name: screen.name === 'progress' ? 'progress' : 'pick' } });
+  }
+
+  /* ================= 成长记录 ================= */
+  var WEEK = ['日', '一', '二', '三', '四', '五', '六'];
+  function renderProgress() {
+    var t = Store.totals(), days = Store.lastDays(7), goal = S().set.goal, streak = Store.streak();
+    var max = goal; days.forEach(function (d) { if (d.n > max) max = d.n; });
+    max = Math.ceil(max / 4) * 4;
+    var peak = 0; days.forEach(function (d) { if (d.n > peak) peak = d.n; });
+    var bars = days.map(function (d, i) {
+      var label = d.today || (d.n === peak && d.n > 0);
+      return '<button class="bar-col' + (d.today ? ' today' : '') + '" data-act="day" data-i="' + i + '" aria-label="' + (d.date.getMonth() + 1) + ' 月 ' + d.date.getDate() + ' 日，写了 ' + d.n + ' 个字">' +
+        '<span class="bar-box"><i style="height:' + (100 * d.n / max).toFixed(1) + '%">' + (label && d.n ? '<em>' + d.n + '</em>' : '') + '</i></span>' +
+        '<span class="bar-x">' + (d.today ? '今天' : '周' + WEEK[d.date.getDay()]) + '</span></button>';
+    }).join('');
+    var grid = Store.WORLDS.map(function (w) {
+      return '<div class="pg-group"><h4>' + w.name.replace('岛', '') + '</h4><div class="cells">' + w.chars.map(function (ch) {
+        var st = Store.stage(ch);
+        return '<button class="cell st' + st + '" data-act="char" data-ch="' + ch + '" aria-label="' + kindLabel(ch) + ' ' + ch + '，' + STAGE[st] + '">' + glyphSvg(ch) + '</button>';
+      }).join('') + '</div></div>';
+    }).join('');
+    var weak = Store.weakChars(6);
+    var badges = Store.BADGES.map(function (b) {
+      var got = !!S().badges[b.id];
+      return '<div class="badge' + (got ? ' got' : '') + '">' + icon(got ? 'medal' : 'lock') + '<b>' + b.name + '</b><span>' + b.desc + '</span></div>';
+    }).join('');
+    app.innerHTML = '<section class="screen progress">' + header('成长记录', 'home') +
+      '<div class="scroll pg">' +
+      '<div class="stat-row">' +
+        '<div class="stat"><b>' + t.learned + '<small> / ' + t.all + '</small></b><span>能自己写的字</span></div>' +
+        '<div class="stat"><b>' + t.stars + '<small> / ' + t.maxStars + '</small></b><span>收集的星星</span></div>' +
+        '<div class="stat"><b>' + streak + '<small> 天</small></b><span>连续练字</span></div>' +
+        '<div class="stat"><b>' + timeHtml(t.sec) + '</b><span>累计练习时间</span></div>' +
+      '</div>' +
+      '<div class="card chart-card"><h3>最近 7 天写了多少个字</h3>' +
+        '<div class="chart" style="--g:' + (goal / max).toFixed(3) + '"><div class="goal-line"><span>目标 ' + goal + '</span></div><div class="bars">' + bars + '</div></div>' +
+        '<p class="chart-note" id="dayNote">' + dayNote(days[6]) + '</p></div>' +
+      '<div class="card"><h3>每个字练到哪一步了</h3>' +
+        '<div class="legend">' + [0, 1, 2, 3].map(function (i) { return '<span><i class="cell st' + i + '"></i>' + STAGE[i] + '</span>'; }).join('') + '</div>' + grid +
+        '<p class="hint-line">点一个字，看它的详细记录。</p></div>' +
+      '<div class="card"><h3>需要多练的字</h3>' + (weak.length
+        ? '<div class="weak">' + weak.map(function (x) { return '<button class="weak-item" data-act="char" data-ch="' + x.ch + '">' + glyphSvg(x.ch) + '<span>' + x.acc + '%</span></button>'; }).join('') + '</div>' +
+          '<button class="btn btn-go" data-act="weak">' + icon('pencil') + '<span>专项练习这 ' + weak.length + ' 个字</span></button>'
+        : '<p class="empty">' + (t.tried ? '目前没有特别薄弱的字，保持下去。' : '开始练字以后，这里会列出准确度偏低的字。') + '</p>') + '</div>' +
+      '<div class="card"><h3>成就</h3><div class="badges">' + badges + '</div></div>' +
+      '<p class="sync-line" id="syncLine">' + syncText() + '</p>' +
+      '</div></section>';
+  }
+  var STAGE = ['还没练', '会描红', '会写虚线', '能自己写'];
+  function dayNote(d) {
+    return (d.date.getMonth() + 1) + ' 月 ' + d.date.getDate() + ' 日（周' + WEEK[d.date.getDay()] + '）：写了 ' + d.n + ' 个字，练了 ' + fmtTime(d.sec) + '，拿到 ' + d.g + ' 颗宝石';
+  }
+  function syncText() {
+    return Store.syncStatus === 'cloud' ? icon('cloud') + '进度已同步到云端，换设备登录也能接着练' : '进度保存在这台设备的浏览器里';
+  }
+
+  function charInfo(ch) {
+    var r = Store.rec(ch), acc = Store.avgAcc(ch), a = r.a, spark = '';
+    if (a.length > 1) {
+      var W = 220, H = 56, pts = a.map(function (v, i) { return [8 + i * (W - 16) / (a.length - 1), 6 + (H - 12) * (1 - v / 100)]; });
+      spark = '<svg class="spark" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="最近 ' + a.length + ' 次的准确度：' + a.join('、') + '">' +
+        '<line x1="0" x2="' + W + '" y1="' + (H - 6) + '" y2="' + (H - 6) + '" class="spark-base"/>' +
+        '<polyline points="' + pts.map(function (p) { return p[0].toFixed(1) + ',' + p[1].toFixed(1); }).join(' ') + '"/>' +
+        '<circle cx="' + pts[pts.length - 1][0].toFixed(1) + '" cy="' + pts[pts.length - 1][1].toFixed(1) + '" r="4.5"/></svg>' +
+        '<p class="spark-cap">最近 ' + a.length + ' 次准确度，最新一次 ' + a[a.length - 1] + '%</p>';
+    }
+    openModal('<div class="info"><button class="ibtn modal-x" data-act="modal-close" aria-label="关闭">' + icon('close') + '</button>' +
+      '<div class="info-head"><div class="info-glyph">' + glyphSvg(ch) + '</div><div><h3>' + kindLabel(ch) + ' ' + ch + '</h3>' +
+      '<p>' + (r.n ? '写过 ' + r.n + ' 次' + (acc !== null ? '，平均准确度 ' + acc + '%' : '') : '还没有练过') + '</p></div></div>' +
+      '<div class="info-modes">' + Store.MODES.map(function (m, i) {
+        return '<button class="info-mode" data-act="practice" data-ch="' + ch + '" data-id="' + m + '"><b>' + MODE_NAME[m] + '</b>' + starRow(r.s[i], 'stars-s') + '<span>去练习</span></button>';
+      }).join('') + '</div>' + spark + '</div>', 'modal-info');
+  }
+
+  /* ================= 商店 ================= */
+  function penPreview(it, i) {
+    var id = 'pg' + i, stops = '';
+    if (it.rainbow) for (var k = 0; k <= 6; k++) stops += '<stop offset="' + (k / 6) + '" stop-color="hsl(' + (k * 55) + ',86%,54%)"/>';
+    else if (it.stripe) {
+      var n = 8;
+      for (var j = 0; j < n; j++) {
+        var c = it.colors[j % it.colors.length];
+        stops += '<stop offset="' + (j / n) + '" stop-color="' + c + '"/><stop offset="' + ((j + 1) / n) + '" stop-color="' + c + '"/>';
+      }
+    } else it.colors.concat(it.colors.length > 1 ? [it.colors[0]] : []).forEach(function (c, q, arr) {
+      stops += '<stop offset="' + (arr.length > 1 ? q / (arr.length - 1) : 0) + '" stop-color="' + c + '"/>';
+    });
+    return '<svg class="pen-prev" viewBox="0 0 120 56" aria-hidden="true"><defs><linearGradient id="' + id + '" x1="0" x2="1" y1="0" y2="0">' + stops + '</linearGradient></defs>' +
+      '<path d="M10 38 C24 6 40 6 50 30 S76 54 86 26 S104 14 110 22" fill="none" stroke="url(#' + id + ')" stroke-width="7" stroke-linecap="round"/></svg>';
+  }
+  function renderShop() {
+    var st = S();
+    function card(type, it, prev) {
+      var owned = st.owned[type].indexOf(it.id) >= 0, using = st.use[type] === it.id;
+      var btn = using ? '<span class="shop-btn using">' + icon('check') + '使用中</span>'
+        : owned ? '<span class="shop-btn own">使用</span>'
+        : '<span class="shop-btn price' + (st.gems < it.price ? ' poor' : '') + '">' + icon('gem') + it.price + '</span>';
+      return '<button class="shop-item' + (using ? ' using' : '') + '" data-act="shop-item" data-type="' + type + '" data-id="' + it.id + '">' + prev + '<b>' + it.name + '</b>' + btn + '</button>';
+    }
+    app.innerHTML = '<section class="screen shop">' + header('宝石商店', 'home') +
+      '<div class="scroll shop-main">' +
+      '<div class="card"><h3>墨水</h3><div class="shop-grid">' + Store.SHOP.pen.map(function (it, i) { return card('pen', it, penPreview(it, i)); }).join('') + '</div></div>' +
+      '<div class="card"><h3>写字板</h3><div class="shop-grid">' + Store.SHOP.board.map(function (it) {
+        return card('board', it, '<span class="board-prev board" data-skin="' + it.id + '"><i></i><i></i><i></i><i></i></span>');
+      }).join('') + '</div></div>' +
+      '<div class="card"><h3>伙伴</h3><div class="shop-grid">' + Store.SHOP.buddy.map(function (it) { return card('buddy', it, '<span class="buddy-prev">' + it.face + '</span>'); }).join('') + '</div></div>' +
+      '<p class="hint-line">写字拿星星就能得到宝石：一颗星换一颗宝石，过关和完成每日目标还有奖励。</p>' +
+      '</div></section>';
+  }
+  function shopTap(type, id) {
+    var st = S(), it = Store.item(type, id);
+    if (st.owned[type].indexOf(id) >= 0) { Store.equip(type, id); Sfx.tap(); renderShop(); return; }
+    var r = Store.buy(type, id);
+    if (r === 'poor') { Sfx.oops(); toast(icon('gem') + '还差 ' + (it.price - st.gems) + ' 颗宝石，再去写几个字吧'); return; }
+    Sfx.buy(); confetti(40);
+    toast(icon('check') + '「' + it.name + '」到手啦，已经换上', 'good');
+    renderShop();
+  }
+
+  /* ================= 设置 ================= */
+  var OPTS = [
+    { k: 'sound', name: '音效', opts: [[true, '开'], [false, '关']] },
+    { k: 'voice', name: '朗读题目', opts: [['zh', '中文'], ['en', 'English'], ['off', '关']] },
+    { k: 'diff', name: '描红判定', opts: [['easy', '宽松'], ['normal', '标准'], ['hard', '严格']], note: '越严格，笔尖离线越近才算对' },
+    { k: 'size', name: '字的大小', opts: [['l', '大'], ['m', '中'], ['s', '小']], note: '刚开始用大字，熟练后换小字' },
+    { k: 'hand', name: '写字的手', opts: [['right', '右手'], ['left', '左手']], note: '左手会把提示栏换到右边' },
+    { k: 'input', name: '用什么写', opts: [['auto', '自动'], ['pen', '只认笔'], ['any', '手指也行']], note: '自动：用过 Apple Pencil 后只认笔尖，防手掌误触' },
+    { k: 'goal', name: '每日目标', opts: [[6, '6 个字'], [12, '12 个字'], [20, '20 个字']] }
+  ];
+  function renderSettings(askReset) {
+    var st = S();
+    openModal('<div class="settings"><button class="ibtn modal-x" data-act="modal-close" aria-label="关闭">' + icon('close') + '</button><h3>设置</h3>' +
+      OPTS.map(function (o) {
+        return '<div class="opt"><div class="opt-name"><b>' + o.name + '</b>' + (o.note ? '<span>' + o.note + '</span>' : '') + '</div><div class="seg" role="group" aria-label="' + o.name + '">' +
+          o.opts.map(function (v, i) {
+            return '<button id="opt-' + o.k + '-' + i + '" class="' + (st.set[o.k] === v[0] ? 'on' : '') + '" aria-pressed="' + (st.set[o.k] === v[0]) + '" data-act="set" data-k="' + o.k + '" data-i="' + i + '">' + v[1] + '</button>';
+          }).join('') + '</div></div>';
+      }).join('') +
+      '<div class="opt opt-reset"><div class="opt-name"><b>重新开始</b><span>清空星星、宝石和所有记录</span></div>' +
+      (askReset
+        ? '<div class="reset-ask"><button class="btn btn-danger" data-act="reset-yes"><span>确定清空</span></button><button class="btn btn-soft" data-act="settings"><span>不清了</span></button></div>'
+        : '<button class="btn btn-soft" data-act="reset-ask"><span>清空进度</span></button>') + '</div></div>', 'modal-settings');
+  }
+
+  /* ================= 事件 ================= */
+  var acts = {
+    'home': function () { go('home'); },
+    'world': function (t) { go('map', t.dataset.id); },
+    'level': function (t) { startLevel(t.dataset.id); },
+    'replay': function (t) { startLevel(t.dataset.id); },
+    'to-map': function (t) { go('map', t.dataset.id); },
+    'pick': function () { go('pick'); },
+    'progress': function () { go('progress'); },
+    'shop': function () { go('shop'); },
+    'settings': function () { if (play) clearTimeout(play.auto); renderSettings(false); },
+    'modal-close': function () {
+      var wasSettings = !!modalRoot.querySelector('.modal-settings');
+      closeModal();
+      if (wasSettings && screen.name === 'play' && play) { play.done ? nextTask() : loadTask(); }   // 设置改了，当前这个字重新来
+      else if (wasSettings) go(screen.name, screen.arg);
+    },
+    'quit': quit,
+    'leave': function () { var b = play ? play.back : { name: 'home' }; go(b.name, b.arg); },
+    'speak': function () { if (play) Voice.say(play.cur.ch); },
+    'demo': function () { if (board && play && !play.done) board.demo(); },
+    'clear': function () { if (board && play && !play.done) { board.clear(); say('擦干净了，再写一次'); } },
+    'check': checkWrite,
+    'again': function () { if (play) loadTask(); },
+    'next': nextTask,
+    'toggle-input': function () {
+      var m = S().set.input, penOnly = m === 'pen' || (m === 'auto' && penSeen);
+      Store.setOpt('input', penOnly ? 'any' : 'pen');
+      if (board && board.task) board.task.input = S().set.input;
+      inputChip();
+    },
+    'pick-tab': function (t) { pick.tab = t.dataset.id; renderPick(); },
+    'pick-mode': function (t) { pick.mode = t.dataset.id; renderPick(); },
+    'pick-char': function (t) { startFree(t.dataset.ch, pick.mode); },
+    'practice': function (t) { startFree(t.dataset.ch, t.dataset.id); },
+    'char': function (t) { charInfo(t.dataset.ch); },
+    'day': function (t) {
+      var d = Store.lastDays(7)[+t.dataset.i];
+      $('#dayNote').textContent = dayNote(d);
+      var all = app.querySelectorAll('.bar-col');
+      for (var i = 0; i < all.length; i++) all[i].classList.toggle('sel', all[i] === t);
+    },
+    'weak': function () {
+      var tasks = [];
+      Store.weakChars(6).forEach(function (x) { tasks.push({ ch: x.ch, mode: 'trace' }, { ch: x.ch, mode: 'write' }); });
+      if (tasks.length) startSession({ kind: 'weak', tasks: tasks, back: { name: 'progress' } });
+    },
+    'shop-item': function (t) { shopTap(t.dataset.type, t.dataset.id); },
+    'set': function (t) {
+      var o = OPTS.filter(function (x) { return x.k === t.dataset.k; })[0];
+      Store.setOpt(o.k, o.opts[+t.dataset.i][0]);
+      renderSettings(false);
+    },
+    'reset-ask': function () { renderSettings(true); },
+    'reset-yes': function () { Store.reset(); closeModal(); toast('已经清空，从头开始'); go('home'); }
+  };
+  function onClick(e) {
+    var t = e.target.closest ? e.target.closest('[data-act]') : null;
+    if (!t || t.disabled) return;
+    var fn = acts[t.dataset.act];
+    if (!fn) return;
+    Sfx.unlock();
+    if (!/^(check|demo|clear|speak|day|set)$/.test(t.dataset.act)) Sfx.tap();
+    fn(t, e);
+  }
+  doc.addEventListener('click', onClick);
+  doc.addEventListener('pointerdown', function () { Sfx.unlock(); }, { passive: true });
+  doc.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !modalRoot.hidden && modalRoot.querySelector('[data-act="modal-close"]')) acts['modal-close'](); });
+  doc.addEventListener('gesturestart', function (e) { e.preventDefault(); });      // Safari 双指缩放
+  root.addEventListener('resize', function () { if (screen.name === 'map') layoutMap(); });
+
+  Store.on(function (why) {
+    if (why === 'replaced' && screen.name !== 'play') go(screen.name, screen.arg);
+    if (why === 'sync') { var l = $('#syncLine'); if (l) l.innerHTML = syncText(); }
+  });
+
+  /* 字体：异步加载，加载不到就用系统圆体，不挡首屏 */
+  try {
+    var link = doc.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = 'https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=ZCOOL+KuaiLe&display=swap';
+    doc.head.appendChild(link);
+  } catch (e) {}
+
+  /* ---------- 启动 ---------- */
+  function start(data) {
+    var sc = data && data.screen;
+    go(sc && sc.name && sc.name !== 'play' ? sc.name : 'home', sc && sc.arg);
+    Store.initRemote();
+  }
+  var hot = root.claude && root.claude.hot;
+  try {
+    if (hot && hot.snapshot) hot.snapshot(function () { return { screen: screen.name === 'play' && play ? play.back : screen }; });
+  } catch (e) {}
+  if (hot && hot.ready) hot.ready(start); else start((hot && hot.data) || {});
+
+  root.WI.App = { go: go, startSession: startSession, get board() { return board; }, get play() { return play; } };
+})(window);
+</script>
