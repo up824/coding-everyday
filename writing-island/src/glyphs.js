@@ -102,6 +102,51 @@
   G['y'] = ['M26 50 L50 100', 'M74 50 L26 150'];
   G['z'] = ['M26 50 L74 50 L26 100 L74 100'];
 
+  /* ---------- 手写体：收笔带一个向右的小尾巴，y 写成 u 加一个钩 ---------- */
+  // 从竖画 x 处往下，在基线上向右甩出一个小尾巴
+  function tail(x) {
+    return ' L' + x + ' 86 C' + x + ' 96 ' + (x + 5) + ' 100 ' + (x + 11) + ' 100 C' + (x + 15) + ' 100 ' + (x + 18) + ' 97 ' + (x + 20) + ' 93';
+  }
+  var HAND = {
+    'a': [bowl(47) + ' L72 50' + tail(72)],
+    'd': [bowl(47) + ' L72 0' + tail(72)],
+    'h': ['M28 0 L28 100 L28 72 ' + A(50, 72, 22, 22, 180, 180, true) + tail(72)],
+    'i': ['M44 50' + tail(44), 'M44 27 L44 28'],
+    'l': ['M44 0' + tail(44)],
+    'm': ['M10 50 L10 100 L10 70 ' + A(28, 70, 18, 20, 180, 180, true) + ' L46 100 L46 70 ' + A(64, 70, 18, 20, 180, 180, true) + tail(82)],
+    'n': ['M26 50 L26 100 L26 72 ' + A(48, 72, 22, 22, 180, 180, true) + tail(70)],
+    'q': [bowl(47) + ' L72 50 L72 130 C72 146 80 152 91 139'],
+    't': ['M44 10' + tail(44), 'M26 50 L66 50'],
+    'u': ['M26 50 L26 78 ' + A(48, 78, 22, 22, 180, -180, true) + ' L70 50' + tail(70)],
+    'y': ['M26 50 L26 78 ' + A(48, 78, 22, 22, 180, -180, true) + ' L70 50 L70 125 ' + A(46, 125, 24, 25, 0, 150, true)]
+  };
+
+  /* ---------- 字体 ----------
+     每种字体 = 一套笔画（over 里没有的字符沿用标准体）+ 向右倾斜的角度。
+     要加新字体，在这里加一项即可：关卡、描红、示范、识别都会跟着用。 */
+  var STYLES = [
+    { id: 'print', name: '标准体', desc: '端正的印刷体，横平竖直，刚开始学最清楚', slant: 0 },
+    { id: 'slant', name: '斜体', desc: '写法和标准体一样，整体向右倾斜一点', slant: 10 },
+    { id: 'hand', name: '手写体', desc: '向右倾斜，a d n u 等收笔带小尾巴，接近学校常教的手写体', slant: 8, over: HAND }
+  ];
+  var PIVOT = 62;                 // 倾斜时保持不动的高度，让字大致留在格子中间
+  var current = 'print';
+  function styleOf(id) {
+    for (var i = 0; i < STYLES.length; i++) if (STYLES[i].id === id) return STYLES[i];
+    return STYLES[0];
+  }
+  // 把路径整体向右倾斜：x' = x + t·(PIVOT − y)。仿射变换，贝塞尔控制点直接变换即可。
+  function shear(d, t) {
+    if (!t) return d;
+    var tok = d.match(/[MLC]|-?\d*\.?\d+/g) || [], out = [], i = 0;
+    while (i < tok.length) {
+      if (/[MLC]/.test(tok[i])) { out.push(tok[i++]); continue; }
+      var x = parseFloat(tok[i++]), y = parseFloat(tok[i++]);
+      out.push(r1(x + t * (PIVOT - y)), r1(y));
+    }
+    return out.join(' ');
+  }
+
   /* ---------- 默写时也算对的其他常见写法（只用于识别，不用于描红） ---------- */
   var ALT = {
     '1': [['M50 0 L50 100']],
@@ -168,12 +213,15 @@
   }
 
   var cache = {};
-  function glyph(ch) {
-    if (cache[ch]) return cache[ch];
-    var src = G[ch];
+  function glyph(ch, styleId) {
+    var st = styleOf(styleId || current), key = st.id + ch;
+    if (cache[key]) return cache[key];
+    var src = (st.over && st.over[ch]) || G[ch];
     if (!src) return null;
+    var t = Math.tan(st.slant * Math.PI / 180);
     var minX = 1e9, maxX = -1e9, minY = 1e9, maxY = -1e9;
-    var strokes = src.map(function (d) {
+    var strokes = src.map(function (d0) {
+      var d = shear(d0, t);
       var raw = parsePath(d);
       var len = polyLength(raw);
       var pts = resample(raw, STEP);
@@ -181,13 +229,10 @@
         if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
         if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
       });
-      // 起笔方向（给方向箭头用）
-      var k = Math.min(pts.length - 1, 4);
-      var ang = pts.length > 1 ? Math.atan2(pts[k].y - pts[0].y, pts[k].x - pts[0].x) : 0;
-      return { d: d, pts: pts, len: len, dot: len < 6, startAngle: ang };
+      return { d: d, pts: pts, len: len, dot: len < 6 };
     });
-    cache[ch] = { ch: ch, strokes: strokes, box: { minX: minX, maxX: maxX, minY: minY, maxY: maxY } };
-    return cache[ch];
+    cache[key] = { ch: ch, style: st.id, strokes: strokes, box: { minX: minX, maxX: maxX, minY: minY, maxY: maxY } };
+    return cache[key];
   }
 
   var DIGITS = '0123456789'.split('');
@@ -200,9 +245,16 @@
     return 'lower';
   }
 
-  // 某个字符所有“算对”的写法，每种写法是 [[{x,y}...], ...]
+  // 某个字符所有“算对”的写法（各种字体 + 其他常见写法），每种是 [[{x,y}...], ...]。默写识别用。
   function variants(ch) {
-    var out = [glyph(ch).strokes.map(function (s) { return s.pts; })];
+    var out = [], seen = {};
+    STYLES.forEach(function (st) {
+      var own = !!(st.over && st.over[ch]);
+      var key = (own ? st.id : 'base') + '|' + Math.round(st.slant / 5);   // 写法相同、倾斜也差不多的只留一份
+      if (seen[key]) return;
+      seen[key] = true;
+      out.push(glyph(ch, st.id).strokes.map(function (s) { return s.pts; }));
+    });
     (ALT[ch] || []).forEach(function (alt) {
       out.push(alt.map(function (d) { return resample(parsePath(d), STEP); }));
     });
@@ -211,7 +263,11 @@
 
   root.WI = root.WI || {};
   root.WI.Glyphs = {
-    get: glyph, variants: variants, kindOf: kindOf, resample: resample, polyLength: polyLength,
+    get: glyph, variants: variants, kindOf: kindOf,
+    STYLES: STYLES, styleOf: styleOf,
+    style: function () { return styleOf(current); },
+    setStyle: function (id) { current = styleOf(id).id; },
+    PIVOT: PIVOT, resample: resample, polyLength: polyLength,
     DIGITS: DIGITS, UPPER: UPPER, LOWER: LOWER, ALL: DIGITS.concat(UPPER, LOWER), STEP: STEP
   };
 })(typeof window !== 'undefined' ? window : globalThis);

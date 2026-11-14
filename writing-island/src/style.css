@@ -120,6 +120,13 @@ h1, h2, h3 { text-wrap: balance; }
 .hero { padding: 6px 2px 0; display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
 .hero h1 { font: 46px/1.05 var(--f-display); letter-spacing: .04em; }
 .hero p { color: var(--ink-2); font-size: 18px; }
+.font-btn { margin-left: auto; align-self: center; display: inline-flex; align-items: center; gap: 10px; background: var(--card); border-radius: 18px; padding: 6px 8px 6px 14px; box-shadow: 0 3px 0 var(--line); text-align: left; }
+.font-btn:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--line); }
+.font-btn .gl { height: 36px; }
+.font-btn-text { display: flex; flex-direction: column; gap: 3px; }
+.font-btn small { font-size: 12px; line-height: 1; color: var(--ink-2); }
+.font-btn b { font: 18px/1 var(--f-display); font-weight: 400; white-space: nowrap; }
+.font-btn .ic { width: 20px; height: 20px; color: var(--ink-2); }
 .islands { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
 .island { display: flex; flex-direction: column; text-align: left; background: var(--card); border-radius: 26px; overflow: hidden; box-shadow: 0 6px 0 var(--accent-deep); min-width: 0; }
 .island:active { transform: translateY(4px); box-shadow: 0 2px 0 var(--accent-deep); }
@@ -229,6 +236,7 @@ h1, h2, h3 { text-wrap: balance; }
 .b-line { stroke: var(--b-line); stroke-width: 2; }
 .b-line.l-mid { stroke-dasharray: 10 8; }
 .b-line.l-base { stroke: var(--b-base); stroke-width: 3; }
+.b-slant { stroke: var(--b-line); stroke-width: 1.5; opacity: .42; }
 .g-road, .g-fill, .g-ghost { fill: none; stroke-width: 15; stroke-linecap: round; stroke-linejoin: round; }
 .g-road { stroke: var(--b-road); }
 .g-fill { stroke: var(--b-fill); }
@@ -378,6 +386,23 @@ h1, h2, h3 { text-wrap: balance; }
 .opt .seg { box-shadow: none; background: var(--soft); }
 .opt .seg button { min-height: 40px; padding: 0 13px; font-size: 16px; }
 .reset-ask { display: flex; gap: 8px; flex-wrap: wrap; }
+.modal-fonts { width: min(720px, 100%); }
+.fonts { display: flex; flex-direction: column; gap: 12px; }
+.fonts-note { color: var(--ink-2); font-size: 14px; padding-right: 52px; }
+.font-list { display: flex; flex-direction: column; gap: 12px; }
+.font-card { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) auto; align-items: center; gap: 14px; padding: 10px 14px 10px 10px; border-radius: 20px; background: var(--soft); border: 3px solid transparent; text-align: left; }
+.font-card.on { border-color: var(--leaf); background: var(--card); }
+.font-sample { display: block; background: var(--card); border-radius: 14px; overflow: hidden; padding: 8px 10px; color: var(--ink); }
+.font-card.on .font-sample { background: var(--soft); }
+.font-sample .gl { width: 100%; height: auto; }
+.font-sample .gl-rule line { stroke: var(--sea); }
+.font-sample .gl-rule .base { stroke: var(--coral); opacity: .9; }
+.font-meta { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.font-meta b { font: 24px/1.1 var(--f-display); font-weight: 400; }
+.font-meta span { font-size: 14px; color: var(--ink-2); }
+.font-pick { display: inline-flex; align-items: center; gap: 4px; min-height: 40px; padding: 0 14px; border-radius: 20px; background: var(--sea); color: var(--on-accent); font: 17px/1 var(--f-display); white-space: nowrap; }
+.font-card.on .font-pick { background: none; color: var(--leaf-deep); padding: 0 4px; }
+.font-pick .ic { width: 20px; height: 20px; }
 .info { display: flex; flex-direction: column; gap: 14px; }
 .info-head { display: flex; align-items: center; gap: 16px; padding-right: 52px; }
 .info-glyph { background: var(--soft); border-radius: 18px; padding: 10px 14px; }
@@ -445,6 +470,9 @@ h1, h2, h3 { text-wrap: balance; }
   .nav { flex-direction: column; gap: 6px; font-size: 17px; padding: 12px 6px; }
   .stat-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .hero h1 { font-size: 38px; }
+  .hero p { display: none; }
+  .font-card { grid-template-columns: minmax(0, 1fr) auto; }
+  .font-sample { grid-column: 1 / -1; }
 }
 @media (max-width: 520px) {
   .bar-xp { width: 56px; }

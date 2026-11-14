@@ -145,6 +145,43 @@ const url = 'file://' + path.join(__dirname, '..', 'index.html');
   check(await page.evaluate(() => WI.Store.s.plays >= 10), 'progress survives reload');
   await page.context().close();
 
+  /* ---------- 换字体 ---------- */
+  {
+    const p = await open({ width: 1180, height: 820 });
+    await p.click('[data-act="fonts"]'); await p.waitForSelector('.modal-fonts'); await p.waitForTimeout(400);
+    check(await p.locator('.font-card').count() === 3, 'three fonts offered');
+    await shot(p, '17-fonts');
+    await p.click('.font-card[data-id="hand"]');
+    await p.waitForSelector('.modal-fonts', { state: 'detached' });
+    check(await p.evaluate(() => WI.Store.s.set.font === 'hand' && WI.Glyphs.style().id === 'hand'), 'font switched to hand');
+    await p.waitForTimeout(300); await shot(p, '18-home-hand');
+    await p.evaluate(() => WI.App.startSession({ kind: 'free', tasks: [{ ch: 'a', mode: 'trace' }, { ch: 'd', mode: 'write' }], back: { name: 'home' } }));
+    await p.waitForSelector('.play'); await p.waitForTimeout(2600);
+    check(await p.locator('.b-slant').count() > 3, 'slant guide lines drawn for a slanted font');
+    await shot(p, '19-hand-trace');
+    await writeChar(p, 1);
+    await p.waitForSelector('#banner:not([hidden])');
+    check(await p.evaluate(() => WI.App.play.best[0] === 3), 'tracing hand-style a gives three stars');
+    await p.click('[data-act="next"]'); await p.waitForTimeout(500);
+    await writeChar(p, 2);
+    await p.click('#btnCheck');
+    await p.waitForSelector('#banner:not([hidden])');
+    check(await p.evaluate(() => WI.App.play.best[1] >= 2), 'free-writing hand-style d is recognised');
+    await p.waitForTimeout(700); await shot(p, '19b-hand-write');
+    await p.reload(); await p.waitForSelector('.home');
+    check(await p.evaluate(() => WI.Glyphs.style().id === 'hand'), 'font choice survives reload');
+    await p.click('[data-act="settings"]'); await p.waitForSelector('.modal-settings');
+    await p.click('#opt-font-1'); await p.waitForTimeout(200);
+    check(await p.evaluate(() => WI.Glyphs.style().id === 'slant'), 'font can be changed in settings');
+    await p.click('.modal-x'); await p.waitForTimeout(300);
+    await p.click('[data-act="pick"]'); await p.waitForSelector('.pick'); await shot(p, '19c-pick-slant');
+    await p.context().close();
+    const ph = await open({ width: 400, height: 780 });
+    await ph.click('[data-act="fonts"]'); await ph.waitForSelector('.modal-fonts'); await ph.waitForTimeout(400);
+    await shot(ph, '25-phone-fonts');
+    await ph.context().close();
+  }
+
   /* ---------- Apple Pencil：压感、手掌先落下、之后只认笔 ---------- */
   {
     const p = await open({ width: 1180, height: 820 });

@@ -21,22 +21,35 @@
     for (var i = 0; i < 3; i++) h += icon('star', i < n ? 'on' : 'off');
     return h + '</span>';
   }
-  // 用自己的笔画数据画字符（和写字板上的字帖是同一套字形）。rule 为真时带上四线格。
-  function glyphSvg(str, cls, rule, box) {
-    var lower = Gl.kindOf(str[0]) === 'lower', adv = lower ? 96 : 112, d = '';
-    var x0 = lower ? -4 : -6, w = adv * str.length + (lower ? 8 : 4);
-    if (rule) {
-      d += '<g class="gl-rule"><line x1="-3000" x2="3000" y1="0" y2="0"/><line class="mid" x1="-3000" x2="3000" y1="50" y2="50"/>' +
-        '<line class="base" x1="-3000" x2="3000" y1="100" y2="100"/>' + (lower ? '<line x1="-3000" x2="3000" y1="150" y2="150"/>' : '') + '</g>';
-    }
+  // 用自己的笔画数据画字符（和写字板上的字帖是同一套字形，跟着当前字体走）。
+  var RULE = '<g class="gl-rule"><line x1="-3000" x2="3000" y1="0" y2="0"/><line class="mid" x1="-3000" x2="3000" y1="50" y2="50"/>' +
+    '<line class="base" x1="-3000" x2="3000" y1="100" y2="100"/>';
+  function strokesSvg(g) {
+    var d = '';
+    g.strokes.forEach(function (st) {
+      d += st.dot ? '<circle cx="' + st.pts[0].x + '" cy="' + st.pts[0].y + '" r="7.5"/>' : '<path d="' + st.d + '"/>';
+    });
+    return d;
+  }
+  // 单个字符，固定画布（格子里大小一致）。rule 为真时带上四线格。
+  function glyphSvg(ch, cls, rule) {
+    var lower = Gl.kindOf(ch) === 'lower';
+    return '<svg class="gl ' + (lower ? 'gl-lower ' : '') + (cls || '') + '" viewBox="' + (lower ? '-12 -10 124 172' : '-10 -14 124 128') + '" role="img" aria-label="' + ch + '">' +
+      (rule ? RULE + (lower ? '<line x1="-3000" x2="3000" y1="150" y2="150"/>' : '') + '</g>' : '') + strokesSvg(Gl.get(ch)) + '</svg>';
+  }
+  // 一串字符按各自的宽度排开（岛屿封面、字体示例）。o: {style 指定字体, rule 四线格, w 固定画布宽度并居中}
+  function wordSvg(str, o) {
+    o = o || {};
+    var x = 0, body = '', gap = 16;
     for (var i = 0; i < str.length; i++) {
-      d += '<g transform="translate(' + (i * adv) + ' 0)">';
-      Gl.get(str[i]).strokes.forEach(function (st) {
-        d += st.dot ? '<circle cx="' + st.pts[0].x + '" cy="' + st.pts[0].y + '" r="7.5"/>' : '<path d="' + st.d + '"/>';
-      });
-      d += '</g>';
+      if (str[i] === ' ') { x += 30; continue; }
+      var g = Gl.get(str[i], o.style);
+      body += '<g transform="translate(' + (x - g.box.minX).toFixed(1) + ' 0)">' + strokesSvg(g) + '</g>';
+      x += g.box.maxX - g.box.minX + gap;
     }
-    return '<svg class="gl ' + (lower ? 'gl-lower ' : '') + (cls || '') + '" viewBox="' + (box || x0 + ' ' + (lower ? '-10 ' + w + ' 172' : '-14 ' + w + ' 128')) + '" role="img" aria-label="' + str + '">' + d + '</svg>';
+    var w = x - gap, vbW = o.w || w + 28;
+    return '<svg class="gl gl-word" viewBox="' + ((w - vbW) / 2).toFixed(1) + ' -14 ' + vbW.toFixed(1) + ' 128" role="img" aria-label="' + str + '">' +
+      (o.rule ? RULE + '</g>' : '') + body + '</svg>';
   }
   function kindLabel(ch) {
     var k = Gl.kindOf(ch);
@@ -153,7 +166,7 @@
     var islands = Store.WORLDS.map(function (w) {
       var p = Store.worldProgress(w.id), nx = Store.nextLevel(w.id);
       return '<button class="island w-' + w.id + '" data-act="world" data-id="' + w.id + '">' +
-        '<span class="island-art">' + glyphSvg(w.sample, '', true, w.id === 'lower' ? '-26 -14 340 128' : '') + '</span>' +
+        '<span class="island-art">' + wordSvg(w.sample, { rule: true, w: 290 }) + '</span>' +
         '<span class="island-info"><span class="island-name">' + w.name + '</span>' +
         '<span class="island-meta">' + (nx ? '第 ' + nx.n + ' 关 · 共 ' + p.total + ' 关' : '全部通关') + '</span>' +
         '<span class="bar"><i style="width:' + Math.round(100 * p.done / p.total) + '%"></i></span>' +
@@ -171,7 +184,9 @@
           '<button class="ibtn" data-act="settings" aria-label="设置">' + icon('set') + '</button>' +
         '</div></header>' +
       '<div class="scroll home-main">' +
-        '<div class="hero"><h1>写字岛</h1><p>拿起笔，去岛上闯关吧</p></div>' +
+        '<div class="hero"><h1>写字岛</h1><p>拿起笔，去岛上闯关吧</p>' +
+          '<button class="font-btn" data-act="fonts" aria-label="选择字体，现在是' + Gl.style().name + '">' + wordSvg('Aa') +
+          '<span class="font-btn-text"><small>字体</small><b>' + Gl.style().name + '</b></span>' + icon('next') + '</button></div>' +
         '<div class="islands">' + islands + '</div>' +
         '<div class="home-row">' +
           '<div class="goal"><svg class="ring" viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="26" class="ring-bg"/>' +
@@ -606,8 +621,27 @@
     renderShop();
   }
 
+  /* ================= 字体 ================= */
+  function setFont(id) {
+    Store.setOpt('font', id);
+    Gl.setStyle(id);
+  }
+  function renderFonts() {
+    var cur = Gl.style().id;
+    openModal('<div class="fonts"><button class="ibtn modal-x" data-act="modal-close" aria-label="关闭">' + icon('close') + '</button><h3>选择字体</h3>' +
+      '<p class="fonts-note">字帖、示范动画和所有关卡都会换成选中的字体，已经拿到的星星和宝石不受影响。</p>' +
+      '<div class="font-list">' + Gl.STYLES.map(function (st) {
+        var on = st.id === cur;
+        return '<button class="font-card' + (on ? ' on' : '') + '" data-act="font" data-id="' + st.id + '" aria-pressed="' + on + '">' +
+          '<span class="font-sample">' + wordSvg('Panda 123', { style: st.id, rule: true }) + '</span>' +
+          '<span class="font-meta"><b>' + st.name + '</b><span>' + st.desc + '</span></span>' +
+          '<span class="font-pick">' + (on ? icon('check') + '使用中' : '用这个') + '</span></button>';
+      }).join('') + '</div></div>', 'modal-fonts');
+  }
+
   /* ================= 设置 ================= */
   var OPTS = [
+    { k: 'font', name: '字体', opts: Gl.STYLES.map(function (st) { return [st.id, st.name]; }), note: '字帖和示范用哪种写法' },
     { k: 'sound', name: '音效', opts: [[true, '开'], [false, '关']] },
     { k: 'voice', name: '朗读题目', opts: [['zh', '中文'], ['en', 'English'], ['off', '关']] },
     { k: 'diff', name: '描红判定', opts: [['easy', '宽松'], ['normal', '标准'], ['hard', '严格']], note: '越严格，笔尖离线越近才算对' },
@@ -681,8 +715,17 @@
     'shop-item': function (t) { shopTap(t.dataset.type, t.dataset.id); },
     'set': function (t) {
       var o = OPTS.filter(function (x) { return x.k === t.dataset.k; })[0];
-      Store.setOpt(o.k, o.opts[+t.dataset.i][0]);
+      if (o.k === 'font') setFont(o.opts[+t.dataset.i][0]);
+      else Store.setOpt(o.k, o.opts[+t.dataset.i][0]);
       renderSettings(false);
+    },
+    'fonts': renderFonts,
+    'font': function (t) {
+      var st = Gl.styleOf(t.dataset.id);
+      setFont(st.id);
+      closeModal();
+      go(screen.name, screen.arg);
+      toast(icon('check') + '已换成「' + st.name + '」', 'good');
     },
     'reset-ask': function () { renderSettings(true); },
     'reset-yes': function () { Store.reset(); closeModal(); toast('已经清空，从头开始'); go('home'); }
@@ -703,6 +746,7 @@
   root.addEventListener('resize', function () { if (screen.name === 'map') layoutMap(); });
 
   Store.on(function (why) {
+    if (why === 'replaced') Gl.setStyle(S().set.font);
     if (why === 'replaced' && screen.name !== 'play') go(screen.name, screen.arg);
     if (why === 'sync') { var l = $('#syncLine'); if (l) l.innerHTML = syncText(); }
   });
@@ -718,6 +762,7 @@
   /* ---------- 启动 ---------- */
   function start(data) {
     var sc = data && data.screen;
+    Gl.setStyle(S().set.font);
     go(sc && sc.name && sc.name !== 'play' ? sc.name : 'home', sc && sc.arg);
     Store.initRemote();
   }

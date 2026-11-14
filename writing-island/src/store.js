@@ -71,7 +71,7 @@
       days: {},       // 'YYYY-MM-DD' → { n, sec, g, goal }
       owned: { pen: ['ink'], board: ['paper'], buddy: ['panda'] },
       use: { pen: 'ink', board: 'paper', buddy: 'panda' },
-      set: { sound: true, voice: 'zh', diff: 'normal', size: 'm', hand: 'right', input: 'auto', goal: 12 },
+      set: { font: 'print', sound: true, voice: 'zh', diff: 'normal', size: 'm', hand: 'right', input: 'auto', goal: 12 },
       badges: {}, updatedAt: 0
     };
   }

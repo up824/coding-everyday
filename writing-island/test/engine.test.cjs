@@ -40,11 +40,19 @@ function traceAll(ch, amp, tol) {
 let fail = 0;
 const check = (cond, msg) => { if (!cond) { fail++; console.log('FAIL', msg); } };
 
-// 1. 照着模板写：全部完成，三颗星
-for (const ch of Gl.ALL) {
-  const s = traceAll(ch, 0, 12.5);
-  check(s.done && s.result.stars === 3 && s.mistakes === 0, `clean trace ${ch} done=${s.done} ${JSON.stringify(s.result)}`);
+// 1. 照着模板写：每种字体的每个字符都能完成，三颗星
+for (const st of Gl.STYLES) {
+  Gl.setStyle(st.id);
+  for (const ch of Gl.ALL) {
+    const s = traceAll(ch, 0, 12.5);
+    check(s.done && s.result.stars === 3 && s.mistakes === 0, `clean trace [${st.id}] ${ch} done=${s.done} ${JSON.stringify(s.result)}`);
+  }
+  // 稍微抖一点也都能写完
+  let undone = 0;
+  for (const ch of Gl.ALL) if (!traceAll(ch, 4, 12.5).done) undone++;
+  check(undone === 0, `[${st.id}] wobble 4 left ${undone} undone`);
 }
+Gl.setStyle('print');
 // 2. 不同抖动幅度下的星级分布
 for (const [amp, tol] of [[2, 12.5], [4, 12.5], [6, 12.5], [8, 12.5], [4, 9.5], [8, 16]]) {
   const hist = [0, 0, 0, 0]; let undone = 0;
@@ -64,19 +72,29 @@ for (const ch of Gl.ALL) {
   if (sess.done) { revDone++; console.log('  reverse passes:', ch); }
 }
 console.log('反向书写过关的字符数:', revDone);
-// 4. 乱涂不能过关
-let scribDone = 0;
-for (const ch of Gl.ALL) {
-  const g = Gl.get(ch);
-  const sess = new En.TraceSession(g, { tol: 12.5 });
-  for (let k = 0; k < 6; k++) {
-    const pts = []; for (let i = 0; i < 40; i++) pts.push({ x: rr(0, 100), y: rr(g.box.minY, g.box.maxY) });
-    feed(sess, pts);
+// 4. 乱涂基本过不了关，就算碰巧过了也拿不到三颗星
+//    （小写字母的格子小，满格乱涂偶尔能蹭过去，这是容差换来的，所以看比例而不是要求为零）
+{
+  const keep = seed;
+  let pass = 0, three = 0, runs = 0;
+  for (let round = 1; round <= 10; round++) {
+    seed = round * 7919;
+    for (const ch of Gl.ALL) {
+      const g = Gl.get(ch);
+      const sess = new En.TraceSession(g, { tol: 12.5 });
+      for (let k = 0; k < 6; k++) {
+        const pts = []; for (let i = 0; i < 40; i++) pts.push({ x: rr(0, 100), y: rr(g.box.minY, g.box.maxY) });
+        feed(sess, pts);
+      }
+      runs++;
+      if (sess.done) { pass++; if (sess.result.stars === 3) three++; }
+    }
   }
-  if (sess.done) scribDone++;
+  seed = keep;
+  console.log(`乱涂过关: ${pass}/${runs}，其中三颗星 ${three}`);
+  check(pass / runs < 0.08, 'scribble passes too often: ' + pass + '/' + runs);
+  check(three === 0, 'scribble earned three stars ' + three + ' times');
 }
-console.log('乱涂过关的字符数:', scribDone);
-check(scribDone <= 2, 'scribble passes too often');
 // 5. “球加棍”写法：写完圆肚子抬笔，再从上往下写竖
 function seg(x1, y1, x2, y2) { return [{ x: x1, y: y1 }, { x: x2, y: y2 }]; }
 {
@@ -132,6 +150,20 @@ function distort(strokes, o) {
   return out;
 }
 const tplStrokes = ch => Gl.get(ch).strokes.map(s => s.pts);
+// 每种字体：照着字帖写出来的字都要认得出，而且占格判定是三颗星
+for (const st of Gl.STYLES) {
+  Gl.setStyle(st.id);
+  let ok = 0, three = 0, kid = 0;
+  for (const ch of Gl.ALL) {
+    const r = En.recognize(tplStrokes(ch), ch);
+    if (r.ok) ok++; if (r.stars === 3) three++;
+    if (En.recognize(distort(tplStrokes(ch), { amp: 4, sc: 0.2, rot: 8, sh: 0.15, so: 4, ss: 0.1, shuffle: true }), ch).ok) kid++;
+  }
+  console.log(`识别 [${st.id}] 原样 ${ok}/62（三星 ${three}） 孩子笔迹 ${kid}/62`);
+  check(ok === 62 && three === 62, `[${st.id}] exact templates recognised`);
+  check(kid >= 58, `[${st.id}] kid-level pass ${kid}/62`);
+}
+Gl.setStyle('print');
 for (const o of [{ amp: 0, sc: 0, rot: 0, sh: 0 }, { amp: 2.5, sc: 0.1, rot: 5, sh: 0.08, so: 2, ss: 0.05, shuffle: true }, { amp: 4, sc: 0.2, rot: 8, sh: 0.15, so: 4, ss: 0.1, shuffle: true }]) {
   let ok = 0, n = 0; const hist = [0, 0, 0, 0], bad = {};
   for (let rep = 0; rep < 8; rep++) for (const ch of Gl.ALL) {
@@ -158,11 +190,15 @@ check(cross.length <= 12, 'too many look-alike accepts');
 for (const [ch, strokes] of [['1', [[{ x: 50, y: 2 }, { x: 51, y: 98 }]]], ['4', [[{ x: 30, y: 0 }, { x: 30, y: 60 }, { x: 82, y: 60 }], [{ x: 68, y: 0 }, { x: 68, y: 100 }]]]]) {
   check(En.recognize(strokes.map(dense), ch).ok, 'alternate form of ' + ch);
 }
-// b/d、p/q 写反必须判错
-for (const [x, y] of [['b', 'd'], ['d', 'b'], ['p', 'q'], ['q', 'p'], ['6', '9'], ['S', 'Z'], ['A', 'B'], ['3', 'E'], ['M', 'W']]) {
-  const r = En.recognize(tplStrokes(x), y);
-  check(!r.ok, `${x} accepted as ${y}`);
+// b/d、p/q 写反必须判错（每种字体都一样）
+for (const st of Gl.STYLES) {
+  Gl.setStyle(st.id);
+  for (const [x, y] of [['b', 'd'], ['d', 'b'], ['p', 'q'], ['q', 'p'], ['6', '9'], ['S', 'Z'], ['A', 'B'], ['3', 'E'], ['M', 'W'], ['l', 'L'], ['t', 'f'], ['u', 'n'], ['h', 'n']]) {
+    const r = En.recognize(tplStrokes(x), y);
+    check(!r.ok, `[${st.id}] ${x} accepted as ${y}`);
+  }
 }
+Gl.setStyle('print');
 // 大小写占格
 {
   const small = tplStrokes('c'), r = En.recognize(small, 'C');

@@ -143,6 +143,19 @@
       var y = (self.oy + l[1] * self.s).toFixed(1);
       el('line', { 'class': 'b-line ' + l[0], x1: 0, x2: W, y1: y, y2: y }, bg);
     });
+    // 倾斜的字体：加一组淡淡的斜线，帮孩子把每个字写成一样的斜度
+    var slant = Gl.style().slant;
+    if (slant) {
+      var t = Math.tan(slant * Math.PI / 180), gap = 40, n = Math.ceil(W / (gap * this.s) / 2) + 2;
+      for (var k = -n; k <= n; k++) {
+        var xc = 50 + k * gap;
+        el('line', {
+          'class': 'b-slant',
+          x1: (this.ox + (xc + t * Gl.PIVOT) * this.s).toFixed(1), y1: this.oy.toFixed(1),
+          x2: (this.ox + (xc + t * (Gl.PIVOT - 150)) * this.s).toFixed(1), y2: (this.oy + 150 * this.s).toFixed(1)
+        }, bg);
+      }
+    }
     var g = el('g', { transform: this.tf() }, bg);
     var mode = this.task.mode, strokes = this.glyph.strokes;
     this.fills = [];
