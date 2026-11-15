@@ -1290,15 +1290,34 @@ h1, h2, h3 { text-wrap: balance; }
     return s;
   }
 
+  /* iPadOS App 外壳的桥：网页把存档、朗读、屏幕常亮交给原生那一侧。不在 App 里时返回 false。 */
+  function native(msg) {
+    try {
+      var h = root.webkit && root.webkit.messageHandlers && root.webkit.messageHandlers.wi;
+      if (!h) return false;
+      h.postMessage(msg);
+      return true;
+    } catch (e) { return false; }
+  }
+
   var state = fresh();
   var listeners = [];
   function notify(why) { listeners.forEach(function (fn) { try { fn(why); } catch (e) {} }); }
 
   function loadLocal() {
+    var found = null;
     try {
       var raw = root.localStorage && root.localStorage.getItem(KEY);
-      if (raw) state = normalize(JSON.parse(raw));
+      if (raw) found = normalize(JSON.parse(raw));
     } catch (e) { /* 存储不可用就用空白存档 */ }
+    // App 外壳会在页面加载前把它保存的存档放进来；它比浏览器存储更牢靠，记录更多时以它为准
+    try {
+      if (typeof root.__WI_SAVE__ === 'string' && root.__WI_SAVE__) {
+        var kept = normalize(JSON.parse(root.__WI_SAVE__));
+        if (!found || (kept.plays || 0) > (found.plays || 0)) found = kept;
+      }
+    } catch (e) {}
+    if (found) state = found;
   }
 
   /* 云端同步：在 Claude 的 Artifact 里，每个人的进度存在自己的私有文档里，
@@ -1320,7 +1339,10 @@ h1, h2, h3 { text-wrap: balance; }
   }
   function save() {
     state.updatedAt = Date.now();
-    try { root.localStorage && root.localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
+    var json = '';
+    try { json = JSON.stringify(state); } catch (e) { return; }
+    try { root.localStorage && root.localStorage.setItem(KEY, json); } catch (e) {}
+    native({ type: 'save', data: json });
     if (remote.doc) {
       clearTimeout(remote.timer);
       remote.timer = setTimeout(pushRemote, 1500);
@@ -1550,7 +1572,7 @@ h1, h2, h3 { text-wrap: balance; }
   root.WI.Store = {
     get s() { return state; },
     WORLDS: WORLDS, LEVELS: LEVELS, MODES: MODES, MODE_NAME: MODE_NAME, SHOP: SHOP, BADGES: BADGES,
-    world: world, item: item, save: save, initRemote: initRemote,
+    world: world, item: item, save: save, initRemote: initRemote, native: native,
     on: function (fn) { listeners.push(fn); },
     get syncStatus() { return remote.status; },
     today: today, lastDays: lastDays, streak: streak,
@@ -1604,7 +1626,7 @@ h1, h2, h3 { text-wrap: balance; }
     // 第一次点击时调用：iPad 上声音和朗读都要在用户手势里“解锁”一次
     unlock: function () {
       ac();
-      if (primed) return;
+      if (primed || root.WI_NATIVE) return;
       primed = true;
       try {
         if (root.speechSynthesis && root.SpeechSynthesisUtterance) {
@@ -1640,6 +1662,8 @@ h1, h2, h3 { text-wrap: balance; }
   function say(ch) {
     var lang = Store.s.set.voice;
     if (lang === 'off') return;
+    // 在 iPadOS App 里用系统的朗读，比网页朗读更稳
+    if (Store.native({ type: 'speak', text: promptText(ch, lang), lang: lang === 'en' ? 'en-US' : 'zh-CN' })) return;
     try {
       var synth = root.speechSynthesis;
       if (!synth || !root.SpeechSynthesisUtterance) return;
@@ -2269,6 +2293,7 @@ h1, h2, h3 { text-wrap: balance; }
   /* 练字时让屏幕保持常亮（浏览器不允许就算了） */
   var wake = null;
   function keepAwake(on) {
+    if (Store.native({ type: 'awake', on: !!on })) return;
     try {
       if (on) {
         if (!wake && root.navigator.wakeLock && doc.visibilityState === 'visible') {
@@ -2887,7 +2912,7 @@ h1, h2, h3 { text-wrap: balance; }
   });
 
   /* 字体：异步加载，加载不到就用系统圆体，不挡首屏 */
-  try {
+  if (!root.WI_NATIVE) try {
     var link = doc.createElement('link');
     link.rel = 'stylesheet';
     link.href = 'https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=ZCOOL+KuaiLe&display=swap';

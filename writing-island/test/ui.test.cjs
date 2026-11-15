@@ -182,6 +182,40 @@ const url = 'file://' + path.join(__dirname, '..', 'index.html');
     await ph.context().close();
   }
 
+  /* ---------- iPadOS App 外壳：用浏览器模拟原生那一侧，检查存档、朗读、常亮三条消息 ---------- */
+  {
+    const appHtml = fs.readFileSync(path.join(__dirname, '..', 'dist', 'app.html'), 'utf8');
+    const swift = fs.readFileSync(path.join(__dirname, '..', 'ios', 'WritingIsland.swiftpm', 'Page.swift'), 'utf8');
+    const open3 = 'let pageHTML: String = ###"' + '""\n', close3 = '"' + '""###\n';
+    const embedded = swift.slice(swift.indexOf(open3) + open3.length, swift.lastIndexOf(close3));
+    check(swift.indexOf(open3) > 0 && embedded === appHtml, 'Page.swift embeds exactly dist/app.html');
+
+    const ctx = await browser.newContext({ viewport: { width: 1180, height: 820 } });
+    const p = await ctx.newPage();
+    p.on('pageerror', e => errors.push(String(e)));
+    await p.addInitScript(() => {
+      window.__sent = [];
+      window.WI_NATIVE = true;
+      window.__WI_SAVE__ = JSON.stringify({ v: 1, gems: 77, gemsEarned: 77, score: 900, plays: 5, levels: { 'num-1': 3 }, set: { font: 'hand' } });
+      window.webkit = { messageHandlers: { wi: { postMessage: m => window.__sent.push(m) } } };
+    });
+    await p.goto('file://' + path.join(__dirname, '..', 'dist', 'app.html'));
+    await p.waitForSelector('.home');
+    check(await p.evaluate(() => WI.Store.s.gems === 77 && WI.Store.s.plays === 5 && WI.Glyphs.style().id === 'hand'), 'app shell save is restored on launch');
+    check(await p.evaluate(() => document.querySelectorAll('link[href*="fonts.googleapis"]').length === 0), 'app shell makes no font request');
+    await p.evaluate(() => WI.App.startSession({ kind: 'free', tasks: [{ ch: 'L', mode: 'dots' }], back: { name: 'home' } }));
+    await p.waitForSelector('.play'); await p.waitForTimeout(600);
+    await writeChar(p, 1);
+    await p.waitForSelector('#banner:not([hidden])');
+    const sent = await p.evaluate(() => window.__sent);
+    const types = sent.map(m => m.type);
+    check(types.includes('awake') && sent.some(m => m.type === 'awake' && m.on === true), 'awake message sent when writing starts');
+    check(sent.some(m => m.type === 'speak' && m.lang === 'zh-CN' && /L/.test(m.text)), 'speak message sent: ' + JSON.stringify(sent.filter(m => m.type === 'speak')));
+    const saves = sent.filter(m => m.type === 'save');
+    check(saves.length > 0 && JSON.parse(saves[saves.length - 1].data).plays === 6, 'save message carries the updated progress');
+    await ctx.close();
+  }
+
   /* ---------- Apple Pencil：压感、手掌先落下、之后只认笔 ---------- */
   {
     const p = await open({ width: 1180, height: 820 });

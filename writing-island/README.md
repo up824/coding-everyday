@@ -37,7 +37,7 @@
 ## 开发
 
 ```
-node build.mjs              # 把 src/ 拼成 index.html（独立网页）和 dist/artifact.html（Artifact 用）
+node build.mjs              # 把 src/ 拼成 index.html（独立网页）、dist/artifact.html（Artifact 用）和 iPadOS App 里的页面
 node test/engine.test.cjs   # 判定引擎测试：模拟书写，检查描红判定和默写识别
 node test/ui.test.cjs       # 界面测试：用模拟笔迹打通第一关并截图（需要 Playwright）
 ```
@@ -51,6 +51,7 @@ node test/ui.test.cjs       # 界面测试：用模拟笔迹打通第一关并�
 | `src/audio.js` | 音效（WebAudio 合成）和朗读 |
 | `src/app.js`、`src/style.css`、`src/body.html` | 界面 |
 | `sw.js`、`manifest.webmanifest`、`icons/` | 离线缓存和主屏幕图标 |
+| `ios/` | iPadOS App 工程（把同一张网页包成 App），用法见 `ios/README.md` |
 
 ### 加一种新字体
 

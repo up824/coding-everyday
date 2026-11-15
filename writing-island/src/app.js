@@ -134,6 +134,7 @@
   /* 练字时让屏幕保持常亮（浏览器不允许就算了） */
   var wake = null;
   function keepAwake(on) {
+    if (Store.native({ type: 'awake', on: !!on })) return;
     try {
       if (on) {
         if (!wake && root.navigator.wakeLock && doc.visibilityState === 'visible') {
@@ -752,7 +753,7 @@
   });
 
   /* 字体：异步加载，加载不到就用系统圆体，不挡首屏 */
-  try {
+  if (!root.WI_NATIVE) try {
     var link = doc.createElement('link');
     link.rel = 'stylesheet';
     link.href = 'https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=ZCOOL+KuaiLe&display=swap';

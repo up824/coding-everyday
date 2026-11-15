@@ -41,7 +41,7 @@
     // 第一次点击时调用：iPad 上声音和朗读都要在用户手势里“解锁”一次
     unlock: function () {
       ac();
-      if (primed) return;
+      if (primed || root.WI_NATIVE) return;
       primed = true;
       try {
         if (root.speechSynthesis && root.SpeechSynthesisUtterance) {
@@ -77,6 +77,8 @@
   function say(ch) {
     var lang = Store.s.set.voice;
     if (lang === 'off') return;
+    // 在 iPadOS App 里用系统的朗读，比网页朗读更稳
+    if (Store.native({ type: 'speak', text: promptText(ch, lang), lang: lang === 'en' ? 'en-US' : 'zh-CN' })) return;
     try {
       var synth = root.speechSynthesis;
       if (!synth || !root.SpeechSynthesisUtterance) return;

@@ -1,6 +1,8 @@
 // 把 src/ 里的文件拼成两个成品：
 //   index.html          独立网页（可放到任何静态托管上，支持“添加到主屏幕”和离线）
 //   dist/artifact.html  发布到 Claude Artifact 用的页面片段
+//   dist/app.html 和 ios/WritingIsland.swiftpm/Page.swift
+//                       iPadOS App 外壳里显示的页面（同一份内容，以 Swift 字符串的形式编进 App）
 // 用法：node build.mjs
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -57,7 +59,38 @@ if ('serviceWorker' in navigator && location.protocol === 'https:') {
 </html>
 `;
 
+// App 外壳用的页面：不需要清单、主屏幕图标和离线缓存（这些由 App 自己负责）
+const appPage = `<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no,maximum-scale=1">
+<title>${TITLE}</title>
+<style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0}[hidden]{display:none!important}</style>
+<style>
+${css}</style>
+</head>
+<body>
+${body}
+<script>
+${js}</script>
+</body>
+</html>
+`;
+// 页面会放进 Swift 的原始字符串 ###"""…"""### 里，所以内容里不能出现它的结束标记或转义前缀
+const CLOSE = '"' + '"' + '"###';
+if (appPage.includes(CLOSE) || appPage.includes('\\###')) throw new Error('页面里出现了 Swift 原始字符串的结束标记');
+const swift = `// 由 build.mjs 生成，不要手改：改 src/ 里的文件，然后运行 node build.mjs。
+// 内容是整个网页，编进 App 里，所以 App 不联网也能用。
+
+let pageHTML: String = ###"""
+${appPage}${CLOSE}
+`;
+
 mkdirSync(join(root, 'dist'), { recursive: true });
+mkdirSync(join(root, 'ios', 'WritingIsland.swiftpm'), { recursive: true });
+writeFileSync(join(root, 'dist', 'app.html'), appPage);
+writeFileSync(join(root, 'ios', 'WritingIsland.swiftpm', 'Page.swift'), swift);
 writeFileSync(join(root, 'dist', 'artifact.html'), artifact);
 writeFileSync(join(root, 'index.html'), standalone);
-console.log(`index.html ${(standalone.length / 1024).toFixed(0)} KB · dist/artifact.html ${(artifact.length / 1024).toFixed(0)} KB`);
+console.log(`index.html ${(standalone.length / 1024).toFixed(0)} KB · dist/artifact.html ${(artifact.length / 1024).toFixed(0)} KB · ios/…/Page.swift ${(swift.length / 1024).toFixed(0)} KB`);

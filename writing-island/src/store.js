@@ -87,15 +87,34 @@
     return s;
   }
 
+  /* iPadOS App 外壳的桥：网页把存档、朗读、屏幕常亮交给原生那一侧。不在 App 里时返回 false。 */
+  function native(msg) {
+    try {
+      var h = root.webkit && root.webkit.messageHandlers && root.webkit.messageHandlers.wi;
+      if (!h) return false;
+      h.postMessage(msg);
+      return true;
+    } catch (e) { return false; }
+  }
+
   var state = fresh();
   var listeners = [];
   function notify(why) { listeners.forEach(function (fn) { try { fn(why); } catch (e) {} }); }
 
   function loadLocal() {
+    var found = null;
     try {
       var raw = root.localStorage && root.localStorage.getItem(KEY);
-      if (raw) state = normalize(JSON.parse(raw));
+      if (raw) found = normalize(JSON.parse(raw));
     } catch (e) { /* 存储不可用就用空白存档 */ }
+    // App 外壳会在页面加载前把它保存的存档放进来；它比浏览器存储更牢靠，记录更多时以它为准
+    try {
+      if (typeof root.__WI_SAVE__ === 'string' && root.__WI_SAVE__) {
+        var kept = normalize(JSON.parse(root.__WI_SAVE__));
+        if (!found || (kept.plays || 0) > (found.plays || 0)) found = kept;
+      }
+    } catch (e) {}
+    if (found) state = found;
   }
 
   /* 云端同步：在 Claude 的 Artifact 里，每个人的进度存在自己的私有文档里，
@@ -117,7 +136,10 @@
   }
   function save() {
     state.updatedAt = Date.now();
-    try { root.localStorage && root.localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
+    var json = '';
+    try { json = JSON.stringify(state); } catch (e) { return; }
+    try { root.localStorage && root.localStorage.setItem(KEY, json); } catch (e) {}
+    native({ type: 'save', data: json });
     if (remote.doc) {
       clearTimeout(remote.timer);
       remote.timer = setTimeout(pushRemote, 1500);
@@ -347,7 +369,7 @@
   root.WI.Store = {
     get s() { return state; },
     WORLDS: WORLDS, LEVELS: LEVELS, MODES: MODES, MODE_NAME: MODE_NAME, SHOP: SHOP, BADGES: BADGES,
-    world: world, item: item, save: save, initRemote: initRemote,
+    world: world, item: item, save: save, initRemote: initRemote, native: native,
     on: function (fn) { listeners.push(fn); },
     get syncStatus() { return remote.status; },
     today: today, lastDays: lastDays, streak: streak,
