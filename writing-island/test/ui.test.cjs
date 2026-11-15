@@ -28,16 +28,19 @@ const url = 'file://' + path.join(__dirname, '..', 'index.html');
     const b = WI.App.board, r = b.host.getBoundingClientRect();
     return b.glyph.strokes.map(st => st.pts.map(p => [r.left + b.ox + p.x * b.s, r.top + b.oy + p.y * b.s]));
   });
-  async function draw(page, pts, jitter = 0) {
+  // step > 1 时隔点取样（长句子用，快很多；引擎自己会在两点之间补点）
+  async function draw(page, pts, jitter = 0, step = 1) {
     await page.mouse.move(pts[0][0], pts[0][1]);
     await page.mouse.down();
-    for (let i = 1; i < pts.length; i++) await page.mouse.move(pts[i][0] + Math.sin(i * 0.7) * jitter, pts[i][1] + Math.cos(i * 0.5) * jitter);
+    for (let i = step; i < pts.length - 1; i += step) await page.mouse.move(pts[i][0] + Math.sin(i * 0.7) * jitter, pts[i][1] + Math.cos(i * 0.5) * jitter);
+    if (pts.length > 1) await page.mouse.move(pts[pts.length - 1][0], pts[pts.length - 1][1]);
     await page.mouse.up();
   }
   async function writeChar(page, jitter) {
     await page.waitForTimeout(120);
     const strokes = await strokePts(page);
-    for (const s of strokes) await draw(page, s.length > 1 ? s : [s[0], s[0]], jitter);
+    const step = strokes.length > 12 ? 3 : 1;
+    for (const s of strokes) await draw(page, s.length > 1 ? s : [s[0], s[0]], jitter, step);
   }
 
   /* ---------- iPad 横屏 ---------- */
@@ -144,6 +147,136 @@ const url = 'file://' + path.join(__dirname, '..', 'index.html');
   await page.reload(); await page.waitForSelector('.home');
   check(await page.evaluate(() => WI.Store.s.plays >= 10), 'progress survives reload');
   await page.context().close();
+
+  /* ---------- 单词和句子 ---------- */
+  {
+    const p = await open({ width: 1180, height: 820 });
+    check(await p.locator('.island').count() === 5, 'five islands on the home screen');
+    await shot(p, '30-home-5');
+    // 每个字母的每一笔在屏幕上的坐标；swap 可以把某个位置换成别的字母（模拟写错）
+    const letterPts = (page, swap) => page.evaluate((swap) => {
+      const b = WI.App.board, r = b.host.getBoundingClientRect();
+      return b.comp.letters.map((L, i) => {
+        const g = swap && swap[i] ? WI.Glyphs.get(swap[i]) : L.g;
+        return g.strokes.map(st => st.pts.map(q => [r.left + b.ox + (q.x + L.x) * b.s, r.top + b.oy + (q.y + L.y) * b.s]));
+      });
+    }, swap || null);
+    const writeText = async (page, swap, only) => {
+      const letters = await letterPts(page, swap);
+      for (let i = 0; i < letters.length; i++) {
+        if (only && !only.includes(i)) continue;
+        for (const st of letters[i]) await draw(page, st.length > 1 ? st : [st[0], st[0]], 1, letters.length > 8 ? 3 : 1);
+      }
+    };
+
+    // 单词岛第一关：5 个单词，每个先描红再自己写
+    await p.click('.island.w-word'); await p.waitForSelector('.map');
+    await shot(p, '31-word-map');
+    await p.click('.node.next'); await p.waitForSelector('.play'); await p.waitForTimeout(500);
+    const tasks = await p.evaluate(() => WI.App.play.tasks.map(t => t.text + ':' + t.mode));
+    check(tasks.length === 10 && tasks[0] === 'I:trace' && tasks[3] === 'you:write', 'word level tasks: ' + tasks.join(' '));
+    for (let i = 0; i < tasks.length; i++) {
+      await p.waitForTimeout(250);
+      const mode = await p.evaluate(() => WI.App.play.cur.mode);
+      if (i === 2) { await p.waitForTimeout(400); await shot(p, '32-word-trace'); }
+      if (mode === 'write') { await writeText(p); if (i === 3) await shot(p, '33-word-write'); await p.click('#btnCheck'); }
+      else await writeChar(p, 1);
+      await p.waitForSelector('#banner:not([hidden])', { timeout: 5000 });
+      if (i === 3) { await p.waitForTimeout(700); await shot(p, '34-word-done'); }
+      await p.click('[data-act="next"]');
+    }
+    await p.waitForSelector('.modal-result');
+    const ws = await p.evaluate(() => ({ lv: WI.Store.s.levels['word-1'], you: WI.Store.trec('you').s, plays: WI.Store.s.plays }));
+    check(ws.lv === 3 && ws.you[0] === 3 && ws.you[2] === 3 && ws.plays === 10, 'word level recorded: ' + JSON.stringify(ws));
+
+    // 写错一个字母：cat 写成 cot → 标红、只擦掉那个字母，重写后过关
+    await p.evaluate(() => WI.App.startSession({ kind: 'free', tasks: [{ text: 'cat', mode: 'write' }], back: { name: 'home' } }));
+    await p.waitForSelector('.play'); await p.waitForTimeout(500);
+    await writeText(p, { 1: 'o' });
+    await p.click('#btnCheck'); await p.waitForTimeout(300);
+    const wrong = await p.evaluate(() => ({ marks: WI.App.board.marks.join(','), done: WI.App.play.done, fails: WI.App.play.fails }));
+    check(wrong.marks === 'ok,bad,ok' && !wrong.done && wrong.fails === 1, 'cot for cat flags only the middle letter: ' + JSON.stringify(wrong));
+    await shot(p, '35-word-wrong');
+    await p.waitForTimeout(1200);
+    check(await p.evaluate(() => WI.App.board.inks.every(k => k.letter !== 1) && WI.App.board.inks.length === 3), 'only the wrong letter is erased');
+    await writeText(p, null, [1]);
+    await p.click('#btnCheck');
+    await p.waitForSelector('#banner:not([hidden])', { timeout: 5000 });
+    check(await p.evaluate(() => WI.App.play.best[0] >= 2), 'rewriting the letter passes');
+
+    // 一个字母都没写对位置：提示在横线上写
+    await p.evaluate(() => WI.App.startSession({ kind: 'free', tasks: [{ text: 'dog', mode: 'write' }], back: { name: 'home' } }));
+    await p.waitForSelector('.play'); await p.waitForTimeout(500);
+    const bb = await p.locator('#board').boundingBox();
+    await draw(p, [[bb.x + 30, bb.y + 30], [bb.x + 90, bb.y + 60]]);
+    await p.click('#btnCheck'); await p.waitForTimeout(300);
+    check(await p.evaluate(() => WI.App.board.marks.join(',') === 'bad,bad,bad' && !WI.App.play.done), 'stray ink does not pass a word');
+
+    // 十二个词的长句：描红 + 自己写，记下检查用了多久
+    const long = 'After school I do my homework and then play with my dog.';
+    await p.evaluate((t) => WI.App.startSession({ kind: 'free', tasks: [{ text: t, mode: 'trace' }, { text: t, mode: 'write' }], back: { name: 'home' } }), long);
+    await p.waitForSelector('.play'); await p.waitForTimeout(600);
+    const info = await p.evaluate(() => ({ rows: WI.App.board.comp.rows, n: WI.App.board.comp.letters.length, s: WI.App.board.s, tol: WI.App.board.sess.tol }));
+    console.log('长句排版: ' + JSON.stringify(info));
+    await shot(p, '36-sentence-trace');
+    await writeChar(p, 0.6);
+    await p.waitForSelector('#banner:not([hidden])', { timeout: 8000 });
+    check(await p.evaluate(() => WI.App.play.best[0] === 3), 'tracing a 12-word sentence gives three stars');
+    await p.waitForTimeout(600); await shot(p, '37-sentence-traced');
+    await p.click('[data-act="next"]'); await p.waitForTimeout(500);
+    await shot(p, '38-sentence-write-empty');
+    await writeText(p);
+    const t0 = Date.now();
+    await p.click('#btnCheck');
+    await p.waitForSelector('#banner:not([hidden])', { timeout: 8000 });
+    console.log('检查 ' + info.n + ' 个字符用时 ' + (Date.now() - t0) + ' ms');
+    const sr = await p.evaluate((t) => ({ best: WI.App.play.best[1], rec: WI.Store.trec(t), bad: WI.App.board.marks.filter(m => m === 'bad').length }), long);
+    check(sr.best >= 2 && sr.rec.s[2] >= 2 && sr.bad <= 3, 'writing a 12-word sentence is recognised: ' + JSON.stringify(sr));
+    await p.waitForTimeout(700); await shot(p, '39-sentence-written');
+
+    // 句子岛最后一关：一段话
+    await p.evaluate(() => { WI.Store.WORLDS.find(w => w.id === 'sent').levels.forEach(l => { if (!l.para) WI.Store.s.levels[l.id] = 2; }); });
+    await p.click('[data-act="quit"]'); await p.waitForTimeout(200);
+    await p.evaluate(() => WI.App.go('map', 'sent')); await p.waitForSelector('.map'); await p.waitForTimeout(200);
+    await shot(p, '40-sentence-map');
+    await p.click('.node.next'); await p.waitForSelector('.play'); await p.waitForTimeout(500);
+    const para = await p.evaluate(() => WI.App.play.tasks.map(t => t.mode + ':' + t.text));
+    check(para.length === 4 && para.every(t => t.startsWith('write:')), 'paragraph level is four sentences to write: ' + para.join(' | '));
+    for (let i = 0; i < para.length; i++) {
+      await p.waitForTimeout(300);
+      await writeText(p);
+      await p.click('#btnCheck');
+      await p.waitForSelector('#banner:not([hidden])', { timeout: 8000 });
+      await p.click('[data-act="next"]');
+    }
+    await p.waitForSelector('.modal-result'); await p.waitForTimeout(900);
+    check(await p.locator('.result-para').count() === 1, 'paragraph result shows the whole paragraph');
+    await shot(p, '41-paragraph-result');
+    await p.click('[data-act="to-map"]'); await p.waitForSelector('.map');
+    await p.click('[data-act="home"]'); await p.click('[data-act="pick"]'); await p.waitForSelector('.pick');
+    await p.click('[data-act="pick-tab"][data-id="word"]'); await shot(p, '42-pick-words');
+    await p.click('[data-act="pick-tab"][data-id="sent"]'); await shot(p, '43-pick-sentences');
+    await p.click('[data-act="home"]'); await p.click('[data-act="progress"]'); await p.waitForSelector('.progress');
+    await p.locator('.pg .card').nth(2).scrollIntoViewIfNeeded(); await shot(p, '44-progress-text');
+    await p.context().close();
+
+    // 竖屏和手机上的句子
+    for (const [name, vp] of [['ipad-portrait', { width: 820, height: 1180 }], ['phone', { width: 400, height: 780 }]]) {
+      const q = await open(vp);
+      await q.evaluate((t) => WI.App.startSession({ kind: 'free', tasks: [{ text: t, mode: 'trace' }, { text: 'I like cats.', mode: 'write' }], back: { name: 'home' } }), long);
+      await q.waitForSelector('.play'); await q.waitForTimeout(600);
+      await shot(q, '45-' + name + '-sentence');
+      check(!(await q.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1)), name + ' sentence screen scrolls sideways');
+      await writeChar(q, 0.4);
+      await q.waitForSelector('#banner:not([hidden])', { timeout: 8000 });
+      await q.click('[data-act="next"]'); await q.waitForTimeout(500);
+      await writeText(q);
+      await q.click('#btnCheck');
+      await q.waitForSelector('#banner:not([hidden])', { timeout: 8000 });
+      await q.waitForTimeout(600); await shot(q, '46-' + name + '-written');
+      await q.context().close();
+    }
+  }
 
   /* ---------- 换字体 ---------- */
   {

@@ -37,20 +37,32 @@
     return '<svg class="gl ' + (lower ? 'gl-lower ' : '') + (cls || '') + '" viewBox="' + (lower ? '-12 -10 124 172' : '-10 -14 124 128') + '" role="img" aria-label="' + ch + '">' +
       (rule ? RULE + (lower ? '<line x1="-3000" x2="3000" y1="150" y2="150"/>' : '') + '</g>' : '') + strokesSvg(Gl.get(ch)) + '</svg>';
   }
-  // 一串字符按各自的宽度排开（岛屿封面、字体示例）。o: {style 指定字体, rule 四线格, w 固定画布宽度并居中}
-  function wordSvg(str, o) {
+  // 一个单词或一句话，用当前字体排出来，太长会折成几行（岛屿封面、字体示例、练字页的示范）。
+  // o: {style 指定字体, rule 四线格, w 固定画布宽度并居中, maxW 每行最宽多少, scale 固定大小（每个字格单位多少像素）}
+  function textSvg(str, o) {
     o = o || {};
-    var x = 0, body = '', gap = 16;
-    for (var i = 0; i < str.length; i++) {
-      if (str[i] === ' ') { x += 30; continue; }
-      var g = Gl.get(str[i], o.style);
-      body += '<g transform="translate(' + (x - g.box.minX).toFixed(1) + ' 0)">' + strokesSvg(g) + '</g>';
-      x += g.box.maxX - g.box.minX + gap;
+    var comp = Gl.compose(str, o.style, o.maxW), body = '', rule = '';
+    comp.letters.forEach(function (L) {
+      body += '<g transform="translate(' + L.x.toFixed(1) + ' ' + L.y + ')">' + strokesSvg(L.g) + '</g>';
+    });
+    if (o.rule) {
+      rule = '<g class="gl-rule">';
+      for (var r = 0; r < comp.rows; r++) {
+        var y = r * Gl.ROW;
+        rule += '<line x1="-3000" x2="3000" y1="' + y + '" y2="' + y + '"/><line class="mid" x1="-3000" x2="3000" y1="' + (y + 50) + '" y2="' + (y + 50) + '"/>' +
+          '<line class="base" x1="-3000" x2="3000" y1="' + (y + 100) + '" y2="' + (y + 100) + '"/>';
+      }
+      rule += '</g>';
     }
-    var w = x - gap, vbW = o.w || w + 28;
-    return '<svg class="gl gl-word" viewBox="' + ((w - vbW) / 2).toFixed(1) + ' -14 ' + vbW.toFixed(1) + ' 128" role="img" aria-label="' + str + '">' +
-      (o.rule ? RULE + '</g>' : '') + body + '</svg>';
+    // 只有一行、又没有往下伸的字母（g j p q y）时，画布只留到基线下面一点
+    var deep = comp.rows > 1 || comp.letters.some(function (L) { return L.g.box.maxY > 108; });
+    var vbW = o.w || comp.width + 28;
+    return '<svg class="gl gl-word" viewBox="' + ((comp.width - vbW) / 2).toFixed(1) + ' -14 ' + vbW.toFixed(1) + ' ' + (deep ? comp.height + 28 : 128) + '"' +
+      (o.scale ? ' style="width:' + Math.round(vbW * o.scale) + 'px;height:auto;max-width:100%"' : '') +
+      ' role="img" aria-label="' + esc(str) + '">' + rule + body + '</svg>';
   }
+  function esc(str) { return String(str).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;'); }
+  function zhOf(text) { return WI.Words.zh[text] || ''; }
   function kindLabel(ch) {
     var k = Gl.kindOf(ch);
     return k === 'num' ? '数字' : k === 'upper' ? '大写' : '小写';
@@ -166,8 +178,8 @@
     var frac = Math.min(1, day.n / goal), left = Math.max(0, goal - day.n), C = 2 * Math.PI * 26;
     var islands = Store.WORLDS.map(function (w) {
       var p = Store.worldProgress(w.id), nx = Store.nextLevel(w.id);
-      return '<button class="island w-' + w.id + '" data-act="world" data-id="' + w.id + '">' +
-        '<span class="island-art">' + wordSvg(w.sample, { rule: true, w: 290 }) + '</span>' +
+      return '<button class="island w-' + w.id + (w.text ? ' island-wide' : '') + '" data-act="world" data-id="' + w.id + '">' +
+        '<span class="island-art">' + textSvg(w.sample, w.text ? { rule: true } : { rule: true, w: 290 }) + '</span>' +
         '<span class="island-info"><span class="island-name">' + w.name + '</span>' +
         '<span class="island-meta">' + (nx ? '第 ' + nx.n + ' 关 · 共 ' + p.total + ' 关' : '全部通关') + '</span>' +
         '<span class="bar"><i style="width:' + Math.round(100 * p.done / p.total) + '%"></i></span>' +
@@ -186,14 +198,14 @@
         '</div></header>' +
       '<div class="scroll home-main">' +
         '<div class="hero"><h1>写字岛</h1><p>拿起笔，去岛上闯关吧</p>' +
-          '<button class="font-btn" data-act="fonts" aria-label="选择字体，现在是' + Gl.style().name + '">' + wordSvg('Aa') +
+          '<button class="font-btn" data-act="fonts" aria-label="选择字体，现在是' + Gl.style().name + '">' + textSvg('Aa') +
           '<span class="font-btn-text"><small>字体</small><b>' + Gl.style().name + '</b></span>' + icon('next') + '</button></div>' +
         '<div class="islands">' + islands + '</div>' +
         '<div class="home-row">' +
           '<div class="goal"><svg class="ring" viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="26" class="ring-bg"/>' +
             '<circle cx="32" cy="32" r="26" class="ring-fg" stroke-dasharray="' + C.toFixed(1) + '" stroke-dashoffset="' + (C * (1 - frac)).toFixed(1) + '" transform="rotate(-90 32 32)"/></svg>' +
             '<span class="goal-num"><b>' + day.n + '</b>/' + goal + '</span>' +
-            '<span class="goal-text"><b>今日目标</b><span>' + (left ? '再写 ' + left + ' 个字，拿 10 颗宝石' : '今天的目标完成啦') + '</span></span></div>' +
+            '<span class="goal-text"><b>今日目标</b><span>' + (left ? '再练 ' + left + ' 次，拿 10 颗宝石' : '今天的目标完成啦') + '</span></span></div>' +
           '<button class="nav n-pick" data-act="pick">' + icon('pencil') + '<span>自由练习</span></button>' +
           '<button class="nav n-prog" data-act="progress">' + icon('chart') + '<span>成长记录</span></button>' +
           '<button class="nav n-shop" data-act="shop">' + icon('bag') + '<span>宝石商店</span></button>' +
@@ -210,12 +222,14 @@
       var face = !open ? icon('lock') : l.boss ? icon('crown') : '<b>' + l.n + '</b>';
       return '<button class="' + cls + '" data-act="level" data-id="' + l.id + '" aria-label="第 ' + l.n + ' 关' + (open ? '' : '，还没解锁') + '">' +
         '<span class="node-ball">' + face + '</span>' + starRow(stars, 'stars-s') +
-        '<span class="node-label">' + (l.boss ? '大挑战' : l.chars.join(' ')) + '</span></button>';
+        '<span class="node-label' + (l.title ? ' node-title' : '') + '">' + (l.title || (l.boss ? '大挑战' : l.chars.join(' '))) + '</span></button>';
     }).join('');
     app.innerHTML = '<section class="screen map w-' + id + '">' +
       header(w.name, 'home', '<span class="chip chip-star">' + icon('star', 'on') + '<b>' + p.stars + '</b><small>/' + p.maxStars + '</small></span>') +
       '<div class="scroll map-scroll"><div class="track" id="track"><svg class="track-path" aria-hidden="true"><path id="trackPath"/></svg>' + nodes + '</div>' +
-      '<p class="map-tip">每一关都是三步：先描红，再写虚线，最后自己写。全部三颗星有额外的宝石。</p></div></section>';
+      '<p class="map-tip">' + (id === 'word' ? '每个单词先描红，再自己写：每条小横线上写一个字母。'
+        : id === 'sent' ? '句子从两个词开始，越来越长；最后两关是把几句话连起来，自己写出一小段。'
+        : '每一关都是三步：先描红，再写虚线，最后自己写。全部三颗星有额外的宝石。') + '</p></div></section>';
     layoutMap();
     var nextEl = app.querySelector('.node.next');
     if (nextEl && nextEl.scrollIntoView) nextEl.scrollIntoView({ block: 'center' });
@@ -240,6 +254,13 @@
   }
 
   function levelTasks(l) {
+    if (l.texts) {
+      if (l.para) return l.texts.map(function (t) { return { text: t, mode: 'write' }; });
+      if (l.boss) return shuffle(l.texts).slice(0, l.bossN).map(function (t) { return { text: t, mode: 'write' }; });
+      var list = [];
+      l.texts.forEach(function (t) { list.push({ text: t, mode: 'trace' }, { text: t, mode: 'write' }); });
+      return list;
+    }
     if (l.boss) return shuffle(l.chars).slice(0, l.bossN).map(function (ch) { return { ch: ch, mode: 'write' }; });
     var out = [];
     l.chars.forEach(function (ch) { Store.MODES.forEach(function (m) { out.push({ ch: ch, mode: m }); }); });
@@ -261,6 +282,11 @@
     trace: ['从 1 号圆点出发，跟着箭头走', '沿着灰色的路，慢慢写'],
     dots: ['这次只有虚线，沿着它写', '顺着虚线走，笔顺和刚才一样'],
     write: ['看着左边的样子，自己写出来', '格子是空的，轮到你啦']
+  };
+  var INTRO_TEXT = {
+    trace: ['一个字母一个字母地描，写完一个接着下一个', '跟着圆点走，把每个字母描出来'],
+    dots: ['沿着虚线，把每个字母写出来'],
+    write: ['每条小横线上写一个字母', '看着示范，一个字母一个字母地写']
   };
   var HINT = {
     start: '要从闪亮的圆点开始写哦',
@@ -295,7 +321,7 @@
             '<button class="ibtn ibtn-speak" data-act="speak" aria-label="再读一遍">' + icon('sound') + '</button></div>' +
           '<div class="buddy"><span class="buddy-face">' + buddy.face + '</span><div class="bubble" id="bubble"></div></div>' +
           '<div class="tools">' +
-            '<button class="btn btn-soft" data-act="demo">' + icon('play') + '<span>示范</span></button>' +
+            '<button class="btn btn-soft" data-act="demo" id="btnDemo">' + icon('play') + '<span>示范</span></button>' +
             '<button class="btn btn-soft" data-act="clear">' + icon('redo') + '<span>重写</span></button>' +
             '<button class="btn btn-go" data-act="check" id="btnCheck" hidden>' + icon('check') + '<span>写好了</span></button>' +
           '</div>' +
@@ -346,7 +372,7 @@
     var st = S(), t = play.cur;
     board.host.dataset.skin = st.use.board;
     board.setTask({
-      ch: t.ch, mode: mode, tol: En.DIFFICULTY[st.set.diff].tol, size: st.set.size,
+      ch: t.ch, text: t.text, mode: mode, tol: En.DIFFICULTY[st.set.diff].tol, size: st.set.size,
       pen: Store.item('pen', st.use.pen), input: st.set.input
     });
   }
@@ -362,26 +388,40 @@
     clearTimeout(play.auto);
     play.fails = 0; play.assist = false; play.done = false; play.t0 = Date.now();
     $('#banner').hidden = true;
+    $('#boardWrap').classList.remove('lift');
     var tag = $('#modeTag');
     tag.textContent = MODE_NAME[t.mode]; tag.dataset.mode = t.mode;
-    $('#model').innerHTML = glyphSvg(t.ch, '', true);
-    $('#promptText').textContent = kindLabel(t.ch) + ' ' + t.ch;
+    $('.play').className = 'screen play hand-' + S().set.hand + (t.text ? ' is-text' : '');
+    if (t.text) { modelText(); $('#promptText').textContent = zhOf(t.text); }
+    else { $('#model').innerHTML = glyphSvg(t.ch, '', true); $('#promptText').textContent = kindLabel(t.ch) + ' ' + t.ch; }
     $('#btnCheck').hidden = t.mode !== 'write';
-    $('.play').className = 'screen play hand-' + S().set.hand;
+    $('#btnDemo').hidden = !!t.text && t.mode === 'write';       // 自己写单词、句子时，示范就在旁边，不再演示笔顺
+    play.checking = false;
     boardTask(t.mode);
     renderPips(); inputChip();
-    say(pickOne(INTRO[t.mode]));
-    var first = t.mode === 'trace' && Store.rec(t.ch).n === 0;
+    say(pickOne((t.text ? INTRO_TEXT : INTRO)[t.mode]));
+    var first = !t.text && t.mode === 'trace' && Store.rec(t.ch).n === 0;
     setTimeout(function () {
       if (!play || play.cur !== t || play.done) return;
-      Voice.say(t.ch);
+      speakTask(t);
       if (first && board) board.demo();
     }, 380);
+  }
+  function speakTask(t) {
+    if (t.text) Voice.sayText(t.text); else Voice.say(t.ch);
+  }
+  // 练字页上的示范文字：按提示栏的宽度折行，字不会小到看不清
+  function modelText() {
+    var box = $('#model');
+    if (!box || !play || !play.cur || !play.cur.text) return;
+    var px = box.clientWidth || 220;
+    box.innerHTML = textSvg(play.cur.text, { rule: true, maxW: Math.max(520, Math.min(2400, px / 0.27)) });
   }
 
   function checkWrite() {
     if (!play || play.done || !board) return;
     if (!board.hasInk()) { say('先在格子里写出来', true); return; }
+    if (play.cur.text) { checkText(); return; }
     var t = play.cur, r = board.check();
     if (r.ok) {
       board.showGhost();
@@ -401,6 +441,36 @@
     setTimeout(function () { if (play && play.cur === t && !play.done && board) board.clear(); }, 1000);
   }
 
+  // 单词、句子：逐个字母检查。没过关时，只把红色横线上的字母擦掉重写
+  function checkText() {
+    var t = play.cur;
+    if (play.checking) return;
+    play.checking = true;
+    board.checkText(function (r) {
+      if (!play || play.cur !== t || play.done) return;
+      play.checking = false;
+      var miss = r.total - r.ok;
+      if (r.pass) {
+        finishTask(r.stars, r.acc, miss ? '有 ' + miss + ' 个字母没认出来，下次写清楚一点' : '');
+        return;
+      }
+      play.fails++;
+      Sfx.oops(); shake();
+      if (play.fails >= 3) {
+        if (r.ok / r.total >= 0.7) { finishTask(1, r.acc * 0.8, '还有 ' + miss + ' 个字母要多练'); return; }
+        play.assist = true;
+        say('没关系，照着描一遍', true);
+        $('#btnCheck').hidden = true;
+        boardTask('trace');
+        return;
+      }
+      say(miss === r.total ? '在每条小横线上写一个字母' : '红色横线上的 ' + miss + ' 个字母再写一遍', true);
+      setTimeout(function () {
+        if (play && play.cur === t && !play.done && board) board.eraseLetters(r.bad, play.fails >= 2);
+      }, 1100);
+    });
+  }
+
   function bumpGems() {
     var chip = $('#gemChip');
     if (!chip) return;
@@ -413,7 +483,7 @@
     play.done = true;
     board.lock();
     var t = play.cur, secs = (Date.now() - play.t0) / 1000;
-    var rw = Store.recordTask({ ch: t.ch, mode: t.mode, stars: stars, acc: acc, secs: secs });
+    var rw = Store.recordTask({ ch: t.ch, text: t.text, mode: t.mode, stars: stars, acc: acc, secs: secs });
     play.best[play.i] = Math.max(play.best[play.i] || 0, stars);
     play.gems += rw.gems + (rw.goal ? 10 : 0); play.score += rw.score;
     play.accSum += acc; play.accN++;
@@ -429,6 +499,11 @@
       '<div class="banner-act"><button class="btn btn-soft" data-act="again">' + icon('redo') + '<span>再写一次</span></button>' +
       '<button class="btn btn-go' + (auto ? ' auto' : '') + '" data-act="next"><span>' + (last ? (play.kind === 'level' ? '看成绩' : '完成') : '下一个') + '</span>' + icon('next') + '</button></div>';
     b.hidden = false;
+    var wrap = $('#boardWrap');
+    if (t.text && wrap) {                       // 文字可能写满了整块板子：让写字板缩上去一点，成绩条不挡最后一行
+      wrap.style.setProperty('--banner-h', (b.offsetHeight + 16) + 'px');
+      wrap.classList.add('lift');
+    }
     for (var i = 0; i < stars; i++) (function (k) { setTimeout(function () { Sfx.star(k); }, 180 + k * 200); })(i);
     setTimeout(function () { Sfx.gem(); bumpGems(); }, 300 + stars * 200);
     if (stars === 3) confetti(46);
@@ -462,7 +537,8 @@
     var buddy = Store.item('buddy', S().use.buddy);
     openModal(
       '<div class="result"><div class="result-face">' + buddy.face + '</div>' +
-      '<h2>' + (p.level.boss ? '大挑战成功！' : '第 ' + p.level.n + ' 关通过！') + '</h2>' +
+      '<h2>' + (p.level.para ? '你写出了一段话！' : p.level.boss ? '大挑战成功！' : '第 ' + p.level.n + ' 关通过！') + '</h2>' +
+      (p.level.para ? '<div class="result-para">' + textSvg(p.level.texts.join(' '), { maxW: 1500 }) + '<p>' + p.level.texts.map(zhOf).join('') + '</p></div>' : '') +
       '<div class="result-stars">' + [0, 1, 2].map(function (i) { return icon('star', (i < stars ? 'on' : 'off') + ' pop' + i); }).join('') + '</div>' +
       '<div class="result-stats"><div><b>' + Math.round(100 * p.accSum / Math.max(1, p.accN)) + '%</b><span>平均准确度</span></div>' +
       '<div><b>+' + (p.gems + r.gems) + '</b><span>宝石' + (perfect ? '（含全三星奖励）' : '') + '</span></div>' +
@@ -495,9 +571,23 @@
       }).join('') + '</div><div class="seg seg-mode" role="group" aria-label="练习方式">' + Store.MODES.map(function (m) {
         return '<button aria-pressed="' + (m === pick.mode) + '" class="' + (m === pick.mode ? 'on' : '') + '" data-act="pick-mode" data-id="' + m + '">' + MODE_NAME[m] + '</button>';
       }).join('') + '</div></div>' +
-      '<div class="scroll"><div class="tiles">' + w.chars.map(function (ch) {
+      '<div class="scroll">' + (w.text ? textList(w, 'pick-text') : '<div class="tiles">' + w.chars.map(function (ch) {
         return '<button class="tile st' + Store.stage(ch) + '" data-act="pick-char" data-ch="' + ch + '" aria-label="练习 ' + kindLabel(ch) + ' ' + ch + '">' + glyphSvg(ch) + starRow(Store.bestStars(ch), 'stars-s') + '</button>';
-      }).join('') + '</div><p class="hint-line">点一个字开始练，写完会自动接着练下一个。</p></div></section>';
+      }).join('') + '</div>') + '<p class="hint-line">点一个开始练，写完会自动接着练下一个。</p></div></section>';
+  }
+  // 单词是一格一格的小卡片，句子是一行一行的；颜色深浅表示练到了哪一步
+  function textList(w, act) {
+    var word = w.id === 'word';
+    return '<div class="' + (word ? 'tiles tiles-word' : 'sents') + '">' + w.texts.map(function (t) {
+      return '<button class="' + (word ? 'tile tile-word' : 'sent') + ' st' + Store.textStage(t) + '" data-act="' + act + '" data-text="' + esc(t) + '" aria-label="练习 ' + esc(t) + '">' +
+        textSvg(t, { scale: word ? 0.34 : 0.2, maxW: 1700 }) + '<span class="zh">' + zhOf(t) + '</span>' + starRow(Store.textStars(t), 'stars-s') + '</button>';
+    }).join('') + '</div>';
+  }
+  function startFreeText(text, mode) {
+    var w = Store.WORLDS.filter(function (x) { return x.text && x.texts.indexOf(text) >= 0; })[0];
+    if (!w) return;
+    var i = w.texts.indexOf(text), order = w.texts.slice(i).concat(w.texts.slice(0, i));
+    startSession({ kind: 'free', tasks: order.map(function (t) { return { text: t, mode: mode }; }), back: { name: screen.name === 'progress' ? 'progress' : 'pick' } });
   }
   function startFree(ch, mode) {
     var w = Store.world(Gl.kindOf(ch) === 'num' ? 'num' : Gl.kindOf(ch)), i = w.chars.indexOf(ch);
@@ -514,11 +604,11 @@
     var peak = 0; days.forEach(function (d) { if (d.n > peak) peak = d.n; });
     var bars = days.map(function (d, i) {
       var label = d.today || (d.n === peak && d.n > 0);
-      return '<button class="bar-col' + (d.today ? ' today' : '') + '" data-act="day" data-i="' + i + '" aria-label="' + (d.date.getMonth() + 1) + ' 月 ' + d.date.getDate() + ' 日，写了 ' + d.n + ' 个字">' +
+      return '<button class="bar-col' + (d.today ? ' today' : '') + '" data-act="day" data-i="' + i + '" aria-label="' + (d.date.getMonth() + 1) + ' 月 ' + d.date.getDate() + ' 日，练了 ' + d.n + ' 次">' +
         '<span class="bar-box"><i style="height:' + (100 * d.n / max).toFixed(1) + '%">' + (label && d.n ? '<em>' + d.n + '</em>' : '') + '</i></span>' +
         '<span class="bar-x">' + (d.today ? '今天' : '周' + WEEK[d.date.getDay()]) + '</span></button>';
     }).join('');
-    var grid = Store.WORLDS.map(function (w) {
+    var grid = Store.WORLDS.filter(function (w) { return !w.text; }).map(function (w) {
       return '<div class="pg-group"><h4>' + w.name.replace('岛', '') + '</h4><div class="cells">' + w.chars.map(function (ch) {
         var st = Store.stage(ch);
         return '<button class="cell st' + st + '" data-act="char" data-ch="' + ch + '" aria-label="' + kindLabel(ch) + ' ' + ch + '，' + STAGE[st] + '">' + glyphSvg(ch) + '</button>';
@@ -537,12 +627,19 @@
         '<div class="stat"><b>' + streak + '<small> 天</small></b><span>连续练字</span></div>' +
         '<div class="stat"><b>' + timeHtml(t.sec) + '</b><span>累计练习时间</span></div>' +
       '</div>' +
-      '<div class="card chart-card"><h3>最近 7 天写了多少个字</h3>' +
+      '<div class="card chart-card"><h3>最近 7 天练了多少次</h3>' +
         '<div class="chart" style="--g:' + (goal / max).toFixed(3) + '"><div class="goal-line"><span>目标 ' + goal + '</span></div><div class="bars">' + bars + '</div></div>' +
         '<p class="chart-note" id="dayNote">' + dayNote(days[6]) + '</p></div>' +
       '<div class="card"><h3>每个字练到哪一步了</h3>' +
         '<div class="legend">' + [0, 1, 2, 3].map(function (i) { return '<span><i class="cell st' + i + '"></i>' + STAGE[i] + '</span>'; }).join('') + '</div>' + grid +
         '<p class="hint-line">点一个字，看它的详细记录。</p></div>' +
+      '<div class="card"><h3>单词和句子</h3>' +
+        '<div class="legend">' + [0, 1, 2, 3].map(function (i) { return '<span><i class="cell st' + i + '"></i>' + STAGE[i] + '</span>'; }).join('') + '</div>' +
+        Store.WORLDS.filter(function (w) { return w.text; }).map(function (w) {
+          var tt = Store.textTotals(w.id);
+          return '<div class="pg-group"><h4>' + w.short + '：能自己写 ' + tt.done + ' / ' + tt.all + '</h4>' + textList(w, 'practice-text') + '</div>';
+        }).join('') +
+        '<p class="hint-line">点一个单词或句子就去练它。</p></div>' +
       '<div class="card"><h3>需要多练的字</h3>' + (weak.length
         ? '<div class="weak">' + weak.map(function (x) { return '<button class="weak-item" data-act="char" data-ch="' + x.ch + '">' + glyphSvg(x.ch) + '<span>' + x.acc + '%</span></button>'; }).join('') + '</div>' +
           '<button class="btn btn-go" data-act="weak">' + icon('pencil') + '<span>专项练习这 ' + weak.length + ' 个字</span></button>'
@@ -553,7 +650,7 @@
   }
   var STAGE = ['还没练', '会描红', '会写虚线', '能自己写'];
   function dayNote(d) {
-    return (d.date.getMonth() + 1) + ' 月 ' + d.date.getDate() + ' 日（周' + WEEK[d.date.getDay()] + '）：写了 ' + d.n + ' 个字，练了 ' + fmtTime(d.sec) + '，拿到 ' + d.g + ' 颗宝石';
+    return (d.date.getMonth() + 1) + ' 月 ' + d.date.getDate() + ' 日（周' + WEEK[d.date.getDay()] + '）：练了 ' + d.n + ' 次，共 ' + fmtTime(d.sec) + '，拿到 ' + d.g + ' 颗宝石';
   }
   function syncText() {
     return Store.syncStatus === 'cloud' ? icon('cloud') + '进度已同步到云端，换设备登录也能接着练' : '进度保存在这台设备的浏览器里';
@@ -634,7 +731,7 @@
       '<div class="font-list">' + Gl.STYLES.map(function (st) {
         var on = st.id === cur;
         return '<button class="font-card' + (on ? ' on' : '') + '" data-act="font" data-id="' + st.id + '" aria-pressed="' + on + '">' +
-          '<span class="font-sample">' + wordSvg('Panda 123', { style: st.id, rule: true }) + '</span>' +
+          '<span class="font-sample">' + textSvg('Panda 123', { style: st.id, rule: true }) + '</span>' +
           '<span class="font-meta"><b>' + st.name + '</b><span>' + st.desc + '</span></span>' +
           '<span class="font-pick">' + (on ? icon('check') + '使用中' : '用这个') + '</span></button>';
       }).join('') + '</div></div>', 'modal-fonts');
@@ -649,7 +746,7 @@
     { k: 'size', name: '字的大小', opts: [['l', '大'], ['m', '中'], ['s', '小']], note: '刚开始用大字，熟练后换小字' },
     { k: 'hand', name: '写字的手', opts: [['right', '右手'], ['left', '左手']], note: '左手会把提示栏换到右边' },
     { k: 'input', name: '用什么写', opts: [['auto', '自动'], ['pen', '只认笔'], ['any', '手指也行']], note: '自动：用过 Apple Pencil 后只认笔尖，防手掌误触' },
-    { k: 'goal', name: '每日目标', opts: [[6, '6 个字'], [12, '12 个字'], [20, '20 个字']] }
+    { k: 'goal', name: '每日目标', opts: [[6, '6 次'], [12, '12 次'], [20, '20 次']], note: '写一个字、一个单词或一句话都算一次' }
   ];
   function renderSettings(askReset) {
     var st = S();
@@ -685,7 +782,7 @@
     },
     'quit': quit,
     'leave': function () { var b = play ? play.back : { name: 'home' }; go(b.name, b.arg); },
-    'speak': function () { if (play) Voice.say(play.cur.ch); },
+    'speak': function () { if (play) speakTask(play.cur); },
     'demo': function () { if (board && play && !play.done) board.demo(); },
     'clear': function () { if (board && play && !play.done) { board.clear(); say('擦干净了，再写一次'); } },
     'check': checkWrite,
@@ -700,6 +797,8 @@
     'pick-tab': function (t) { pick.tab = t.dataset.id; renderPick(); },
     'pick-mode': function (t) { pick.mode = t.dataset.id; renderPick(); },
     'pick-char': function (t) { startFree(t.dataset.ch, pick.mode); },
+    'pick-text': function (t) { startFreeText(t.dataset.text, pick.mode); },
+    'practice-text': function (t) { startFreeText(t.dataset.text, Store.textStage(t.dataset.text) ? 'write' : 'trace'); },
     'practice': function (t) { startFree(t.dataset.ch, t.dataset.id); },
     'char': function (t) { charInfo(t.dataset.ch); },
     'day': function (t) {
@@ -744,7 +843,10 @@
   doc.addEventListener('pointerdown', function () { Sfx.unlock(); }, { passive: true });
   doc.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !modalRoot.hidden && modalRoot.querySelector('[data-act="modal-close"]')) acts['modal-close'](); });
   doc.addEventListener('gesturestart', function (e) { e.preventDefault(); });      // Safari 双指缩放
-  root.addEventListener('resize', function () { if (screen.name === 'map') layoutMap(); });
+  root.addEventListener('resize', function () {
+    if (screen.name === 'map') layoutMap();
+    if (screen.name === 'play') modelText();
+  });
 
   Store.on(function (why) {
     if (why === 'replaced') Gl.setStyle(S().set.font);

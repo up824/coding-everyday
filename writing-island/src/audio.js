@@ -90,6 +90,21 @@
     } catch (e) { /* 有的环境不让朗读，没关系 */ }
   }
 
+  // 朗读一个单词或一句话（内容是英文，所以总是用英文读）
+  function sayText(text) {
+    if (Store.s.set.voice === 'off') return;
+    if (Store.native({ type: 'speak', text: text, lang: 'en-US' })) return;
+    try {
+      var synth = root.speechSynthesis;
+      if (!synth || !root.SpeechSynthesisUtterance) return;
+      synth.cancel();
+      var u = new root.SpeechSynthesisUtterance(text);
+      u.lang = 'en-US';
+      u.rate = 0.8;
+      synth.speak(u);
+    } catch (e) {}
+  }
+
   root.WI.Sfx = Sfx;
-  root.WI.Voice = { say: say, promptText: promptText };
+  root.WI.Voice = { say: say, sayText: sayText, promptText: promptText };
 })(typeof window !== 'undefined' ? window : globalThis);

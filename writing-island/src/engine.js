@@ -338,15 +338,38 @@
   }
 
   function recognize(strokes, target, pre) {
-    var sa = pre || scoreAll(strokes);
-    if (!sa) return { ok: false, reason: 'empty' };
-    var c = sa;
+    var c, sT, best = 1e9, bestCh = null, ch;
+    if (pre) {
+      c = pre; sT = pre.scores[target];
+      for (ch in pre.scores) {
+        if (ch !== target && !mates(ch, target) && pre.scores[ch] < best) { best = pre.scores[ch]; bestCh = ch; }
+      }
+    } else {
+      c = toCloud(strokes);
+      if (!c) return { ok: false, reason: 'empty' };
+      var T = getTemplates(), i, v, cl;
+      sT = 1e9;
+      for (i = 0; i < T.length; i++) {
+        if (T[i].ch !== target) continue;
+        for (v = 0; v < T[i].clouds.length; v++) sT = Math.min(sT, shapeScore(c.pts, T[i].clouds[v]));
+      }
+      // 只有比“像目标”更像的别的字符才会影响结论，所以先用便宜的下界把大多数模板筛掉
+      // （一句话几十个字母要逐个查，这一步让检查快很多）
+      var bound = sT;
+      for (i = 0; i < T.length; i++) {
+        if (T[i].ch === target || mates(T[i].ch, target)) continue;
+        for (v = 0; v < T[i].clouds.length; v++) {
+          cl = T[i].clouds[v];
+          var far = Math.max(farPart(c.pts, cl), farPart(cl, c.pts));
+          if (far >= bound) continue;
+          var sc = far + cloudMatch(c.pts, cl);
+          if (sc < bound) { bound = sc; best = sc; bestCh = T[i].ch; }
+        }
+      }
+    }
     var w = c.box.maxX - c.box.minX, h = c.box.maxY - c.box.minY;
     if (Math.max(w, h) < 10) return { ok: false, reason: 'tiny' };
-    var tpl = Gl.get(target), sT = sa.scores[target], best = 1e9, bestCh = null;
-    for (var ch in sa.scores) {
-      if (ch !== target && !mates(ch, target) && sa.scores[ch] < best) { best = sa.scores[ch]; bestCh = ch; }
-    }
+    var tpl = Gl.get(target);
     var ok = sT <= REC.pass && sT <= best * REC.ratio + REC.slack;
     var res = { ok: ok, s: sT, best: best, bestCh: bestCh };
     if (!ok) {

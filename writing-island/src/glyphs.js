@@ -102,6 +102,13 @@
   G['y'] = ['M26 50 L50 100', 'M74 50 L26 150'];
   G['z'] = ['M26 50 L74 50 L26 100 L74 100'];
 
+  /* ---------- 标点（写句子时用） ---------- */
+  G['.'] = ['M50 93 L50 94'];
+  G[','] = ['M53 90 C55 100 51 108 43 114'];
+  G['!'] = ['M50 0 L50 66', 'M50 93 L50 94'];
+  G['?'] = [A(50, 25, 24, 25, -165, 215) + ' C58 50 50 54 50 62 L50 68', 'M50 93 L50 94'];
+  G["'"] = ['M52 0 L48 22'];
+
   /* ---------- 手写体：收笔带一个向右的小尾巴，y 写成 u 加一个钩 ---------- */
   // 从竖画 x 处往下，在基线上向右甩出一个小尾巴
   function tail(x) {
@@ -242,7 +249,95 @@
   function kindOf(ch) {
     if (ch >= '0' && ch <= '9') return 'num';
     if (ch >= 'A' && ch <= 'Z') return 'upper';
-    return 'lower';
+    if (ch >= 'a' && ch <= 'z') return 'lower';
+    return 'punct';
+  }
+
+  /* ---------- 排版：把单词、句子排到四线格上 ----------
+     ROW 是一行四线格连同行距的高度。compose 返回一个“合成字形”：
+     strokes 是所有字母的笔画（已经挪到各自的位置，按书写顺序），letters 记着每个字母占的位置。
+     描红引擎只看 strokes，所以一个字母、一个单词、一整句话用的是同一套判定。 */
+  var ROW = 196, SPACE = 46, GAP = 16, MINW = 24;
+  var COMFY = 1.15;               // 每个字格单位 1.15 像素以上，字就够大了
+  function advance(g) { return Math.max(g.box.maxX - g.box.minX, MINW); }
+  function wordWidth(word, styleId) {
+    var w = 0;
+    for (var i = 0; i < word.length; i++) {
+      var g = glyph(word[i], styleId);
+      if (!g) continue;
+      w += (w ? (kindOf(word[i]) === 'punct' ? GAP / 2 : GAP) : 0) + advance(g);
+    }
+    return w;
+  }
+  // 按最大行宽折行，返回每行的单词
+  function wrap(text, styleId, maxW) {
+    var lines = [], cur = [], curW = 0, widest = 0;
+    text.split(' ').forEach(function (word) {
+      if (!word) return;
+      var ww = wordWidth(word, styleId);
+      if (cur.length && maxW && curW + SPACE + ww > maxW) { lines.push(cur); widest = Math.max(widest, curW); cur = []; curW = 0; }
+      curW += (cur.length ? SPACE : 0) + ww;
+      cur.push(word);
+    });
+    if (cur.length) { lines.push(cur); widest = Math.max(widest, curW); }
+    return { lines: lines, width: widest };
+  }
+  function compose(text, styleId, maxW) {
+    var st = styleOf(styleId || current);
+    if (text.length === 1) {              // 单个字符：保持在原来的 0..100 格子里
+      var g1 = glyph(text, st.id);
+      return {
+        text: text, style: st.id, single: true, rows: 1, width: 100, height: 150,
+        letters: [{ ch: text, x: 0, y: 0, row: 0, x0: 0, x1: 100, g: g1, first: 0, n: g1.strokes.length }],
+        strokes: g1.strokes.map(function (s, k) { return { pts: s.pts, dot: s.dot, len: s.len, d: s.d, letter: 0, k: k }; })
+      };
+    }
+    var w = wrap(text, st.id, maxW), letters = [], strokes = [];
+    w.lines.forEach(function (words, r) {
+      var x = 0;
+      words.forEach(function (word, wi) {
+        if (wi) x += SPACE;
+        for (var i = 0; i < word.length; i++) {
+          var g = glyph(word[i], st.id);
+          if (!g) continue;
+          if (i) x += kindOf(word[i]) === 'punct' ? GAP / 2 : GAP;
+          var gw = advance(g), bw = g.box.maxX - g.box.minX;
+          var dx = x + (gw - bw) / 2 - g.box.minX, dy = r * ROW;
+          var L = { ch: word[i], x: dx, y: dy, row: r, x0: x, x1: x + gw, g: g, first: strokes.length, n: g.strokes.length };
+          g.strokes.forEach(function (s, k) {
+            strokes.push({
+              pts: s.pts.map(function (p) { return { x: p.x + dx, y: p.y + dy }; }),
+              dot: s.dot, len: s.len, d: s.d, letter: letters.length, k: k
+            });
+          });
+          letters.push(L);
+          x += gw;
+        }
+      });
+    });
+    return { text: text, style: st.id, single: false, rows: w.lines.length, width: w.width, height: (w.lines.length - 1) * ROW + 150, letters: letters, strokes: strokes };
+  }
+  // 在 W×H（像素）的板子上，折成几行字最大：返回 {comp, scale}
+  function fit(text, styleId, W, H, cap) {
+    var st = styleOf(styleId || current);
+    if (text.length === 1) return { comp: compose(text, st.id), scale: Math.min(H / ROW, W / 150) };
+    var one = wrap(text, st.id, 0), longest = 0;
+    text.split(' ').forEach(function (word) { longest = Math.max(longest, wordWidth(word, st.id)); });
+    var best = null;
+    for (var r = 1; r <= 7; r++) {
+      var lo = longest, hi = Math.max(one.width, longest);
+      for (var it = 0; it < 14; it++) {
+        var mid = (lo + hi) / 2;
+        if (wrap(text, st.id, mid).lines.length <= r) hi = mid; else lo = mid;
+      }
+      var wr = wrap(text, st.id, hi);
+      var sc = Math.min(W / (wr.width + 60), H / (wr.lines.length * ROW));
+      if (cap) sc = Math.min(sc, cap);
+      // 字已经够大就不再多折一行；不够大时，多一行至少要大 8% 才值得
+      if (!best || (best.scale < COMFY && sc > best.scale * 1.08)) best = { maxW: hi, scale: sc, rows: wr.lines.length };
+      if (wr.lines.length < r) break;
+    }
+    return { comp: compose(text, st.id, best.maxW), scale: best.scale };
   }
 
   // 某个字符所有“算对”的写法（各种字体 + 其他常见写法），每种是 [[{x,y}...], ...]。默写识别用。
@@ -263,7 +358,7 @@
 
   root.WI = root.WI || {};
   root.WI.Glyphs = {
-    get: glyph, variants: variants, kindOf: kindOf,
+    get: glyph, variants: variants, kindOf: kindOf, compose: compose, fit: fit, wrap: wrap, ROW: ROW,
     STYLES: STYLES, styleOf: styleOf,
     style: function () { return styleOf(current); },
     setStyle: function (id) { current = styleOf(id).id; },

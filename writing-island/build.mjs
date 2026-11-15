@@ -13,7 +13,7 @@ const read = (f) => readFileSync(join(root, 'src', f), 'utf8');
 
 const css = read('style.css');
 const body = read('body.html');
-const js = ['glyphs.js', 'engine.js', 'store.js', 'audio.js', 'board.js', 'app.js'].map(read).join('\n');
+const js = ['glyphs.js', 'engine.js', 'words.js', 'store.js', 'audio.js', 'board.js', 'app.js'].map(read).join('\n');
 if (/<\/script/i.test(js)) throw new Error('脚本里不能出现 </script');
 
 const TITLE = '写字岛';

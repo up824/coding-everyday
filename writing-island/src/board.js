@@ -71,25 +71,29 @@
     if (this._resize) root.removeEventListener('resize', this._resize);
   };
 
-  /* task: {ch, mode:'trace'|'dots'|'write', tol, size, pen, input} */
+  /* task: {ch 或 text, mode:'trace'|'dots'|'write', tol, size, pen, input}
+     ch 是单个字符；text 是单词或句子，会按板子的大小排成一行或几行。 */
   Board.prototype.setTask = function (task) {
     this.stopDemo();
     this.task = task;
-    this.glyph = Gl.get(task.ch);
-    this.ghost = false;
-    this.locked = false;
-    this.reset();
+    this.text = task.text || task.ch;
+    this.comp = null; this.glyph = null;
+    this.ghost = false; this.locked = false;
+    this.inks = []; this.active = null; this.sess = null; this.dist = 0;
+    this.marks = null; this.ghostSet = null;
     this.layout();
   };
 
   Board.prototype.reset = function () {
     var self = this;
     this.inks = []; this.active = null; this.dist = 0;
-    this.sess = null;
-    if (this.task && this.task.mode !== 'write') {
-      this.sess = new En.TraceSession(this.glyph, {
-        tol: this.task.tol,
-        onStroke: function (i) { self.updateFill(); if (self.cb.onStroke) self.cb.onStroke(i); },
+    this.sess = null; this.marks = null; this.ghostSet = null;
+    if (this.task && this.comp && this.task.mode !== 'write') {
+      // 字小的时候（长句子）按屏幕上的距离把容差放宽一点，不然笔尖稍微一偏就算出格
+      var tol = Math.min(20, Math.max(this.task.tol, 10 / this.s));
+      this.sess = new En.TraceSession(this.comp, {
+        tol: tol,
+        onStroke: function (i) { self.updateFill(); if (self.cb.onStroke) self.cb.onStroke(self.comp.strokes[i].k, i); },
         onReject: function (why, i) {
           self.inks = self.inks.filter(function (k) { if (k.si === i) { k.dead = true; return false; } return true; });
           self.redraw(); self.updateFill();
@@ -101,7 +105,7 @@
   };
 
   Board.prototype.clear = function () {
-    if (!this.task) return;
+    if (!this.task || !this.comp) return;
     this.stopDemo();
     this.ghost = false; this.locked = false;
     this.reset();
@@ -118,15 +122,29 @@
     this.W = r.width; this.H = r.height; this.dpr = dpr;
     this.canvas.width = Math.round(r.width * dpr);
     this.canvas.height = Math.round(r.height * dpr);
-    var f = SIZE[(this.task && this.task.size) || 'm'] || 0.8;
-    this.s = Math.min(this.H / 196, this.W / 150) * f;
-    this.ox = this.W / 2 - 50 * this.s;
-    this.oy = this.H / 2 - 75 * this.s;
+    this.bg.setAttribute('viewBox', '0 0 ' + this.W + ' ' + this.H);
+    this.fx.setAttribute('viewBox', '0 0 ' + this.W + ' ' + this.H);
+    if (!this.task) return;
+    var f = SIZE[this.task.size || 'm'] || 0.8;
+    var single = Math.min(this.H / Gl.ROW, this.W / 150) * f;      // 单个字符的大小，也是单词和句子的上限
+    var c = this.comp;
+    var started = c && (this.inks.length > 0 || (this.sess && (this.sess.si > 0 || this.sess.prog > 0)));
+    if (started) {
+      // 已经动笔了：板子大小变了（转屏、成绩条出现）也不重新折行，只是整体放大缩小，写好的笔迹跟着走
+      this.s = c.single ? single : Math.min(this.W / (c.width + 60), this.H / (c.rows * Gl.ROW), single);
+    } else {
+      var fitted = Gl.fit(this.text, null, this.W, this.H, single);
+      this.s = fitted.comp.single ? single : fitted.scale;
+      if (!c || c.rows !== fitted.comp.rows || Math.abs(c.width - fitted.comp.width) > 0.5 || c.style !== fitted.comp.style) {
+        this.comp = this.glyph = fitted.comp;
+        this.reset();
+      }
+    }
+    this.ox = this.W / 2 - this.comp.width / 2 * this.s;
+    this.oy = this.H / 2 - this.comp.height / 2 * this.s;
     var cs = root.getComputedStyle(this.host);
     this.inkColor = (cs.getPropertyValue('--b-ink') || '').trim() || '#22335C';
     this.wrongColor = (cs.getPropertyValue('--b-wrong') || '').trim() || '#F5A3B1';
-    this.bg.setAttribute('viewBox', '0 0 ' + this.W + ' ' + this.H);
-    this.fx.setAttribute('viewBox', '0 0 ' + this.W + ' ' + this.H);
     this.drawBg(); this.redraw(); this.drawFx();
   };
 
@@ -135,63 +153,82 @@
   };
 
   Board.prototype.drawBg = function () {
-    var bg = this.bg, W = this.W, self = this;
+    var bg = this.bg, W = this.W, self = this, comp = this.comp, s = this.s;
     while (bg.firstChild) bg.removeChild(bg.firstChild);
-    if (!this.task) return;
-    // 四线三格：第三线（基线）是红色实线，第二线是虚线
-    [['l-top', 0], ['l-mid', 50], ['l-base', 100], ['l-bot', 150]].forEach(function (l) {
-      var y = (self.oy + l[1] * self.s).toFixed(1);
-      el('line', { 'class': 'b-line ' + l[0], x1: 0, x2: W, y1: y, y2: y }, bg);
-    });
-    // 倾斜的字体：加一组淡淡的斜线，帮孩子把每个字写成一样的斜度
-    var slant = Gl.style().slant;
-    if (slant) {
-      var t = Math.tan(slant * Math.PI / 180), gap = 40, n = Math.ceil(W / (gap * this.s) / 2) + 2;
-      for (var k = -n; k <= n; k++) {
-        var xc = 50 + k * gap;
-        el('line', {
-          'class': 'b-slant',
-          x1: (this.ox + (xc + t * Gl.PIVOT) * this.s).toFixed(1), y1: this.oy.toFixed(1),
-          x2: (this.ox + (xc + t * (Gl.PIVOT - 150)) * this.s).toFixed(1), y2: (this.oy + 150 * this.s).toFixed(1)
-        }, bg);
+    this.fills = []; this.slots = []; this._fi = 0;
+    if (!this.task || !comp) return;
+    var slant = Gl.styleOf(comp.style).slant, t = Math.tan(slant * Math.PI / 180), r;
+    for (r = 0; r < comp.rows; r++) {
+      var top = this.oy + r * Gl.ROW * s;
+      // 四线三格：第三线（基线）是红色实线，第二线是虚线
+      [['l-top', 0], ['l-mid', 50], ['l-base', 100], ['l-bot', 150]].forEach(function (l) {
+        var y = (top + l[1] * s).toFixed(1);
+        el('line', { 'class': 'b-line ' + l[0], x1: 0, x2: W, y1: y, y2: y }, bg);
+      });
+      // 倾斜的字体：加一组淡淡的斜线，帮孩子把每个字写成一样的斜度
+      if (slant) {
+        var gap = 40, lo = Math.floor(-this.ox / s / gap) - 2, hi = Math.ceil((W - this.ox) / s / gap) + 2;
+        for (var k = lo; k <= hi; k++) {
+          el('line', {
+            'class': 'b-slant',
+            x1: (this.ox + (k * gap + t * Gl.PIVOT) * s).toFixed(1), y1: top.toFixed(1),
+            x2: (this.ox + (k * gap + t * (Gl.PIVOT - 150)) * s).toFixed(1), y2: (top + 150 * s).toFixed(1)
+          }, bg);
+        }
       }
     }
     var g = el('g', { transform: this.tf() }, bg);
-    var mode = this.task.mode, strokes = this.glyph.strokes;
-    this.fills = [];
-    if (mode === 'trace' || this.ghost) {
-      strokes.forEach(function (st) {
-        if (st.dot) el('circle', { 'class': self.ghost ? 'g-ghost-dot' : 'g-road-dot', cx: st.pts[0].x, cy: st.pts[0].y, r: 7.5 }, g);
-        else el('path', { 'class': self.ghost ? 'g-ghost' : 'g-road', d: st.d }, g);
-      });
-    }
-    if (mode === 'trace') {
-      strokes.forEach(function (st) {
-        var f;
-        if (st.dot) f = el('circle', { 'class': 'g-fill-dot', cx: st.pts[0].x, cy: st.pts[0].y, r: 7.5 }, g);
-        else f = el('path', { 'class': 'g-fill', d: st.d, pathLength: 100, 'stroke-dasharray': 100, 'stroke-dashoffset': 100 }, g);
-        self.fills.push(f);
-      });
-      strokes.forEach(function (st) { if (!st.dot) el('path', { 'class': 'g-dash', d: st.d }, g); });
-    } else if (mode === 'dots') {
-      strokes.forEach(function (st) {
-        if (st.dot) el('circle', { 'class': 'g-dots-dot', cx: st.pts[0].x, cy: st.pts[0].y, r: 6 }, g);
-        else el('path', { 'class': 'g-dots', d: st.d }, g);
+    var mode = this.task.mode;
+    comp.letters.forEach(function (L, li) {
+      var lg = el('g', { transform: 'translate(' + L.x.toFixed(2) + ' ' + L.y + ')' }, g);
+      var ghost = self.ghost || (self.ghostSet && self.ghostSet[li]);
+      var strokes = L.g.strokes;
+      if (mode === 'trace' || ghost) {
+        strokes.forEach(function (st) {
+          if (st.dot) el('circle', { 'class': ghost ? 'g-ghost-dot' : 'g-road-dot', cx: st.pts[0].x, cy: st.pts[0].y, r: 7.5 }, lg);
+          else el('path', { 'class': ghost ? 'g-ghost' : 'g-road', d: st.d }, lg);
+        });
+      }
+      if (mode === 'trace') {
+        strokes.forEach(function (st, n) {
+          var f;
+          if (st.dot) f = el('circle', { 'class': 'g-fill-dot', cx: st.pts[0].x, cy: st.pts[0].y, r: 7.5 }, lg);
+          else f = el('path', { 'class': 'g-fill', d: st.d, pathLength: 100, 'stroke-dasharray': 100, 'stroke-dashoffset': 100 }, lg);
+          f.style.opacity = 0;
+          self.fills[L.first + n] = f;
+        });
+        strokes.forEach(function (st) { if (!st.dot) el('path', { 'class': 'g-dash', d: st.d }, lg); });
+      } else if (mode === 'dots') {
+        strokes.forEach(function (st) {
+          if (st.dot) el('circle', { 'class': 'g-dots-dot', cx: st.pts[0].x, cy: st.pts[0].y, r: 6 }, lg);
+          else el('path', { 'class': 'g-dots', d: st.d }, lg);
+        });
+      }
+    });
+    // “自己写”一个单词或一句话：每个字母下面一条短横线，告诉孩子这个字母写在哪儿；检查后变绿或变红
+    if (mode === 'write' && !comp.single) {
+      comp.letters.forEach(function (L, li) {
+        var m = self.marks && self.marks[li];
+        self.slots[li] = el('line', { 'class': 'b-slot' + (m ? ' ' + m : ''), x1: L.x0 + 3, x2: L.x1 - 3, y1: L.y + 112, y2: L.y + 112 }, g);
       });
     }
     this.updateFill();
   };
 
+  // 只更新“刚写完的那一笔”和“正在写的这一笔”，长句子里不用每次把几十笔都刷一遍
   Board.prototype.updateFill = function () {
     if (!this.sess || !this.fills || !this.fills.length) return;
-    var s = this.sess, strokes = this.glyph.strokes;
-    for (var i = 0; i < this.fills.length; i++) {
+    var s = this.sess, strokes = this.comp.strokes;
+    var to = Math.min(strokes.length - 1, s.si);
+    for (var i = this._fi || 0; i <= to; i++) {
       var f = this.fills[i], st = strokes[i];
+      if (!f) continue;
       if (st.dot) { f.style.opacity = i < s.si ? 1 : 0; continue; }
-      var frac = i < s.si ? 1 : i === s.si ? s.prog / (st.pts.length - 1) : 0;
+      var frac = i < s.si ? 1 : s.prog / (st.pts.length - 1);
       f.setAttribute('stroke-dashoffset', (100 * (1 - frac)).toFixed(1));
       f.style.opacity = frac > 0 ? 1 : 0;      // 避免圆头在起点漏出一个小点
     }
+    this._fi = to;
   };
 
   /* ---------- 起笔点、笔顺数字、方向箭头 ---------- */
@@ -200,13 +237,13 @@
     if (this.demoToken && this.demoLayer) return;          // 示范动画进行中，先不动
     while (fx.firstChild) fx.removeChild(fx.firstChild);
     if (!this.task || !this.sess || this.sess.done) return;
-    var s = this.sess, strokes = this.glyph.strokes;
-    var R = Math.max(11, Math.min(21, this.s * 6.5));
+    var s = this.sess, strokes = this.comp.strokes;
+    var R = Math.max(9, Math.min(21, this.s * 6.5));
     var X = function (p) { return self.ox + p.x * self.s; }, Y = function (p) { return self.oy + p.y * self.s; };
     var cur = strokes[s.si], p0 = cur.pts[s.prog];
-    // 后面几笔的小号码
+    // 这个字母后面几笔的小号码
     var placed = [{ x: X(cur.pts[0]), y: Y(cur.pts[0]) }];
-    for (var i = s.si + 1; i < strokes.length; i++) {
+    for (var i = s.si + 1; i < strokes.length && strokes[i].letter === cur.letter; i++) {
       var q = { x: X(strokes[i].pts[0]), y: Y(strokes[i].pts[0]) };
       for (var k = 0; k < placed.length; k++) {
         if (Math.hypot(q.x - placed[k].x, q.y - placed[k].y) < R * 1.5) { q.x += R * 1.75; q.y -= R * 0.35; k = -1; }
@@ -214,10 +251,10 @@
       placed.push(q);
       var g2 = el('g', { 'class': 'fx-next' }, fx);
       el('circle', { cx: q.x, cy: q.y, r: R * 0.62 }, g2);
-      el('text', { x: q.x, y: q.y, 'font-size': R * 0.78, dy: '0.36em' }, g2).textContent = i + 1;
+      el('text', { x: q.x, y: q.y, 'font-size': R * 0.78, dy: '0.36em' }, g2).textContent = strokes[i].k + 1;
     }
     // 方向箭头
-    if (!cur.dot && cur.pts.length > 10 && this.task.mode !== 'write') {
+    if (!cur.dot && cur.pts.length > 10) {
       var a = Math.min(cur.pts.length - 3, s.prog + Math.round(15 / STEP));
       var pa = cur.pts[Math.max(0, a - 2)], pb = cur.pts[Math.min(cur.pts.length - 1, a + 2)];
       var ang = Math.atan2(pb.y - pa.y, pb.x - pa.x) * 180 / Math.PI;
@@ -231,10 +268,10 @@
     var g = el('g', { 'class': 'fx-start', transform: 'translate(' + X(p0).toFixed(1) + ' ' + Y(p0).toFixed(1) + ')' }, fx);
     el('circle', { 'class': 'fx-pulse', r: R }, g);
     el('circle', { 'class': 'fx-dot', r: R * (s.prog > 0 ? 0.6 : 1) }, g);
-    if (s.prog === 0) el('text', { 'font-size': R * 1.15, dy: '0.36em' }, g).textContent = s.si + 1;
+    if (s.prog === 0) el('text', { 'font-size': R * 1.15, dy: '0.36em' }, g).textContent = cur.k + 1;
   };
 
-  /* ---------- 示范动画 ---------- */
+  /* ---------- 示范动画（单词和句子里只示范正在写的那个字母） ---------- */
   Board.prototype.stopDemo = function () {
     if (!this.demoToken) return;
     this.demoToken = 0;
@@ -243,22 +280,23 @@
     this.drawFx();
   };
   Board.prototype.demo = function () {
-    if (!this.task || !this.W) return;
+    if (!this.task || !this.W || !this.comp) return;
     this.stopDemo();
     var self = this, token = (this.demoToken = Date.now() + Math.random());
-    var fx = this.fx;
+    var fx = this.fx, comp = this.comp;
+    var li = this.sess && !this.sess.done ? comp.strokes[this.sess.si].letter : 0;
+    var L = comp.letters[li], strokes = comp.strokes.slice(L.first, L.first + L.n), local = L.g.strokes;
     while (fx.firstChild) fx.removeChild(fx.firstChild);
     var layer = (this.demoLayer = el('g', { 'class': 'demo', transform: this.tf() }, fx));
-    var strokes = this.glyph.strokes, i = 0;
+    var inner = el('g', { transform: 'translate(' + L.x.toFixed(2) + ' ' + L.y + ')' }, layer), i = 0;
     var pen = el('circle', { 'class': 'demo-pen', r: 6.5, cx: strokes[0].pts[0].x, cy: strokes[0].pts[0].y }, layer);
     function next() {
       if (self.demoToken !== token) return;
       if (i >= strokes.length) { setTimeout(function () { if (self.demoToken === token) self.stopDemo(); }, 650); return; }
       var st = strokes[i], t0 = null, dur = Math.max(420, st.len / 85 * 1000);
       var path = st.dot
-        ? el('circle', { 'class': 'demo-dot', cx: st.pts[0].x, cy: st.pts[0].y, r: 0 }, layer)
-        : el('path', { 'class': 'demo-path', d: st.d, pathLength: 100, 'stroke-dasharray': 100, 'stroke-dashoffset': 100 }, layer);
-      layer.appendChild(pen);
+        ? el('circle', { 'class': 'demo-dot', cx: local[i].pts[0].x, cy: local[i].pts[0].y, r: 0 }, inner)
+        : el('path', { 'class': 'demo-path', d: st.d, pathLength: 100, 'stroke-dasharray': 100, 'stroke-dashoffset': 100 }, inner);
       function frame(t) {
         if (self.demoToken !== token) return;
         if (t0 === null) t0 = t;
@@ -287,7 +325,7 @@
     }
     return pen.id === 'ink' || !pen.colors ? this.inkColor : pen.colors[0];
   };
-  Board.prototype.base = function () { return Math.max(3, this.s * 5.4); };
+  Board.prototype.base = function () { return Math.max(2.4, this.s * 5.4); };
 
   // 画出以第 i 个点结尾的那一小段（用中点做二次曲线，线条更圆滑）
   Board.prototype.drawSeg = function (ink, i, last) {
@@ -454,20 +492,88 @@
 
   /* ---------- 自己写：检查 ---------- */
   Board.prototype.hasInk = function () { return this.inks.length > 0; };
+
+  // 不带点的字符：极短的笔迹（笔尖不小心碰了一下）不参与识别
+  function solid(strokes, glyph) {
+    if (glyph.strokes.some(function (st) { return st.dot; })) return strokes;
+    var keep = strokes.filter(function (pts) {
+      var L = 0;
+      for (var i = 1; i < pts.length; i++) L += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
+      return L >= 4;
+    });
+    return keep.length ? keep : strokes;
+  }
+
+  // 单个字符
   Board.prototype.check = function () {
-    var strokes = this.inks.map(function (k) { return k.pts; });
-    // 不带点的字符：极短的笔迹（笔尖不小心碰了一下）不参与识别
-    var hasDot = this.glyph.strokes.some(function (st) { return st.dot; });
-    if (!hasDot) {
-      var solid = strokes.filter(function (pts) {
-        var L = 0;
-        for (var i = 1; i < pts.length; i++) L += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
-        return L >= 4;
-      });
-      if (solid.length) strokes = solid;
-    }
-    return En.recognize(strokes, this.task.ch);
+    var L = this.comp.letters[0];
+    return En.recognize(solid(this.inks.map(function (k) { return k.pts; }), L.g), L.ch);
   };
+
+  // 单词、句子：先看每一笔落在哪个字母的位置上
+  Board.prototype.assign = function () {
+    var comp = this.comp, per = comp.letters.map(function () { return []; });
+    this.inks.forEach(function (ink) {
+      var cx = 0, cy = 0, n = ink.pts.length;
+      ink.pts.forEach(function (p) { cx += p.x; cy += p.y; });
+      cx /= n; cy /= n;
+      var row = Math.max(0, Math.min(comp.rows - 1, Math.round((cy - 75) / Gl.ROW)));
+      var best = -1, bd = 1e9;
+      comp.letters.forEach(function (L, i) {
+        if (L.row !== row) return;
+        var d = cx < L.x0 ? L.x0 - cx : cx > L.x1 ? cx - L.x1 : 0;
+        if (d < bd) { bd = d; best = i; }
+      });
+      ink.letter = best >= 0 && bd <= 22 ? best : -1;
+      if (ink.letter >= 0) per[ink.letter].push(ink);
+    });
+    return per;
+  };
+
+  /*
+   * 逐个字母检查（分几帧做完，横线会一个个变绿或变红）。
+   * done 收到 {pass, stars, acc, ok, total, bad:[字母序号]}：
+   * 短的单词要求全对；长句子每 12 个字符允许 1 个没认出来，免得识别偶尔看走眼就卡住孩子。
+   */
+  Board.prototype.checkText = function (done) {
+    var self = this, comp = this.comp, per = this.assign(), i = 0, n = comp.letters.length;
+    var okN = 0, starSum = 0, accSum = 0, bad = [], task = this.task;
+    this.marks = [];
+    function step() {
+      if (self.task !== task || self.comp !== comp) return;        // 中途换题了
+      var t0 = Date.now();
+      while (i < n && Date.now() - t0 < 14) {
+        var L = comp.letters[i], inks = per[i], r;
+        if (!inks.length) r = { ok: false };
+        else if (Gl.kindOf(L.ch) === 'punct') r = { ok: true, stars: 3, acc: 1 };      // 标点只看写没写
+        else {
+          r = En.recognize(solid(inks.map(function (k) {
+            return k.pts.map(function (p) { return { x: p.x - L.x, y: p.y - L.y }; });
+          }), L.g), L.ch);
+        }
+        if (r.ok) { okN++; starSum += r.stars; accSum += r.acc; } else bad.push(i);
+        self.marks[i] = r.ok ? 'ok' : 'bad';
+        if (self.slots[i]) self.slots[i].setAttribute('class', 'b-slot ' + self.marks[i]);
+        i++;
+      }
+      if (i < n) { root.requestAnimationFrame(step); return; }
+      var miss = n - okN, q = okN ? starSum / okN : 0, pass = miss <= Math.floor(n / 12);
+      var stars = !pass ? 0 : (miss === 0 && q >= 2.4) ? 3 : q >= 1.7 ? 2 : 1;
+      if (miss > 0) stars = Math.min(stars, 2);
+      done({ pass: pass, stars: stars, acc: okN ? (accSum / okN) * (okN / n) : 0, ok: okN, total: n, bad: bad });
+    }
+    step();
+  };
+
+  // 擦掉指定字母位置上的笔迹，让孩子只重写这几个；hint 为真时在这些位置显示淡淡的字形
+  Board.prototype.eraseLetters = function (list, hint) {
+    var drop = {};
+    list.forEach(function (i) { drop[i] = true; });
+    this.inks = this.inks.filter(function (k) { return !(k.letter >= 0 && drop[k.letter]); });
+    if (hint) this.ghostSet = drop;
+    this.drawBg(); this.redraw();
+  };
+
   Board.prototype.showGhost = function () {
     this.ghost = true;
     this.drawBg();

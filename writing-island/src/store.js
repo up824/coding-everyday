@@ -3,7 +3,7 @@
  */
 (function (root) {
   'use strict';
-  var Gl = root.WI.Glyphs;
+  var Gl = root.WI.Glyphs, Wd = root.WI.Words;
   var KEY = 'writing-island-v1';
 
   /* ---------- 关卡 ---------- */
@@ -15,14 +15,28 @@
   var WORLDS = [
     { id: 'num', name: '数字岛', short: '数字', sample: '123', range: '0 – 9', chars: Gl.DIGITS, groups: [['1', '2', '3'], ['4', '5', '6'], ['7', '8', '9', '0']], bossN: 10 },
     { id: 'upper', name: '大写字母岛', short: '大写', sample: 'ABC', range: 'A – Z', chars: Gl.UPPER, groups: chunk(Gl.UPPER, 3), bossN: 8 },
-    { id: 'lower', name: '小写字母岛', short: '小写', sample: 'abc', range: 'a – z', chars: Gl.LOWER, groups: chunk(Gl.LOWER, 3), bossN: 8 }
+    { id: 'lower', name: '小写字母岛', short: '小写', sample: 'abc', range: 'a – z', chars: Gl.LOWER, groups: chunk(Gl.LOWER, 3), bossN: 8 },
+    // 单词和句子：text 为真，关卡里放的是一串文字而不是单个字符
+    { id: 'word', name: '单词岛', short: '单词', sample: 'cat', text: true, groups: Wd.WORDS, bossN: 6 },
+    { id: 'sent', name: '句子岛', short: '句子', sample: 'I can.', text: true, groups: Wd.SENTS, bossN: 0 }
   ];
   var LEVELS = {};
   WORLDS.forEach(function (w) {
-    w.levels = w.groups.map(function (chars, i) {
-      return { id: w.id + '-' + (i + 1), world: w.id, n: i + 1, chars: chars, boss: false };
-    });
-    w.levels.push({ id: w.id + '-boss', world: w.id, n: w.levels.length + 1, chars: w.chars, boss: true, bossN: w.bossN });
+    if (w.text) {
+      w.texts = [];
+      w.levels = w.groups.map(function (g, i) {
+        var texts = g.items.map(function (it) { return it[0]; });
+        w.texts = w.texts.concat(texts);
+        // para：几句话连成一小段，直接自己写，不先描红
+        return { id: w.id + '-' + (i + 1), world: w.id, n: i + 1, texts: texts, title: g.title, boss: !!g.para, para: !!g.para };
+      });
+      if (w.bossN) w.levels.push({ id: w.id + '-boss', world: w.id, n: w.levels.length + 1, texts: w.texts, title: '大挑战', boss: true, bossN: w.bossN });
+    } else {
+      w.levels = w.groups.map(function (chars, i) {
+        return { id: w.id + '-' + (i + 1), world: w.id, n: i + 1, chars: chars, boss: false };
+      });
+      w.levels.push({ id: w.id + '-boss', world: w.id, n: w.levels.length + 1, chars: w.chars, boss: true, bossN: w.bossN });
+    }
     w.levels.forEach(function (l) { LEVELS[l.id] = l; });
   });
   function world(id) { return WORLDS.filter(function (w) { return w.id === id; })[0]; }
@@ -67,6 +81,7 @@
     return {
       v: 1, gems: 0, gemsEarned: 0, score: 0, plays: 0, combo: 0,
       chars: {},      // ch → { n, s:[描红,虚线,自己写 最高星], a:[最近的准确度], t:时间戳 }
+      texts: {},      // 单词或句子 → 同样的记录
       levels: {},     // 关卡 id → 最高星
       days: {},       // 'YYYY-MM-DD' → { n, sec, g, goal }
       owned: { pen: ['ink'], board: ['paper'], buddy: ['panda'] },
@@ -227,6 +242,19 @@
     list.sort(function (x, y) { return x.acc - y.acc; });
     return list.slice(0, limit || 6);
   }
+  // 单词、句子的记录
+  function trec(text) { return state.texts[text] || { n: 0, s: [0, 0, 0], a: [], t: 0 }; }
+  function textStars(text) { var r = trec(text); return Math.max(r.s[0], r.s[1], r.s[2]); }
+  function textStage(text) {
+    var r = trec(text);
+    return r.s[2] >= 2 ? 3 : (r.s[1] > 0 || r.s[2] > 0) ? 2 : r.s[0] > 0 ? 1 : 0;
+  }
+  function textTotals(worldId) {
+    var w = world(worldId), done = 0;
+    w.texts.forEach(function (t) { if (textStage(t) === 3) done++; });
+    return { done: done, all: w.texts.length };
+  }
+
   function totals() {
     var stars = 0, learned = 0, tried = 0;
     Gl.ALL.forEach(function (ch) {
@@ -255,15 +283,17 @@
   }
   function count(fn) { var n = 0; Gl.ALL.forEach(function (ch) { if (fn(ch)) n++; }); return n; }
   var BADGES = [
-    { id: 'first', name: '第一笔', desc: '写完第一个字', test: function () { return state.plays >= 1; } },
-    { id: 'p100', name: '百字小将', desc: '累计写满 100 个字', test: function () { return state.plays >= 100; } },
-    { id: 'p500', name: '五百字英雄', desc: '累计写满 500 个字', test: function () { return state.plays >= 500; } },
+    { id: 'first', name: '第一笔', desc: '完成第一次练习', test: function () { return state.plays >= 1; } },
+    { id: 'p100', name: '百次小将', desc: '累计练习 100 次', test: function () { return state.plays >= 100; } },
+    { id: 'p500', name: '五百次英雄', desc: '累计练习 500 次', test: function () { return state.plays >= 500; } },
     { id: 's10', name: '三星收集者', desc: '10 个字拿到三颗星', test: function () { return count(function (c) { return bestStars(c) === 3; }) >= 10; } },
     { id: 'sAll', name: '满天星', desc: '62 个字全部三颗星', test: function () { return count(function (c) { return bestStars(c) === 3; }) >= 62; } },
     { id: 'w20', name: '脱稿高手', desc: '20 个字能自己写出来', test: function () { return count(function (c) { return stage(c) === 3; }) >= 20; } },
     { id: 'num', name: '数字岛岛主', desc: '通关数字岛', test: function () { return worldCleared('num'); } },
     { id: 'upper', name: '大写岛岛主', desc: '通关大写字母岛', test: function () { return worldCleared('upper'); } },
     { id: 'lower', name: '小写岛岛主', desc: '通关小写字母岛', test: function () { return worldCleared('lower'); } },
+    { id: 'word', name: '单词岛岛主', desc: '通关单词岛', test: function () { return worldCleared('word'); } },
+    { id: 'sent', name: '会写一段话', desc: '通关句子岛', test: function () { return worldCleared('sent'); } },
     { id: 'd3', name: '坚持 3 天', desc: '连续 3 天来练字', test: function () { return streak() >= 3; } },
     { id: 'd7', name: '坚持一周', desc: '连续 7 天来练字', test: function () { return streak() >= 7; } },
     { id: 'g200', name: '宝石收藏家', desc: '累计获得 200 颗宝石', test: function () { return state.gemsEarned >= 200; } }
@@ -282,27 +312,29 @@
   }
 
   /*
-   * 记一次书写。task: {ch, mode, stars, acc(0..1), secs, assisted}
+   * 记一次书写。task: {ch 或 text, mode, stars, acc(0..1), secs}
    * 返回 {gems, score, record(刷新最高星), goal(今天目标刚达成), badges[]}
    */
   function recordTask(t) {
     var mi = MODES.indexOf(t.mode);
-    var r = state.chars[t.ch] || (state.chars[t.ch] = { n: 0, s: [0, 0, 0], a: [], t: 0 });
+    var book = t.text ? state.texts : state.chars, key = t.text || t.ch;
+    var mult = t.text ? 1 + Math.floor(Wd.letterCount(t.text) / 10) : 1;      // 句子越长，宝石和分数越多
+    var r = book[key] || (book[key] = { n: 0, s: [0, 0, 0], a: [], t: 0 });
     r.n++; r.t = Date.now();
     r.a.push(Math.round(t.acc * 100));
     if (r.a.length > 12) r.a.shift();
-    var out = { gems: t.stars, score: 0, record: false, goal: false, badges: [] };
+    var out = { gems: t.stars * mult, score: 0, record: false, goal: false, badges: [] };
     if (t.stars > r.s[mi]) {
       if (t.stars === 3) { out.gems += 2; out.record = true; }
       r.s[mi] = t.stars;
     }
     state.combo = t.stars === 3 ? state.combo + 1 : 0;
     out.combo = state.combo;
-    out.score = 50 + Math.round(t.acc * 100) + (t.stars === 3 ? 50 : 0) + 10 * Math.min(Math.max(state.combo - 1, 0), 5);
+    out.score = (50 + Math.round(t.acc * 100) + (t.stars === 3 ? 50 : 0) + 10 * Math.min(Math.max(state.combo - 1, 0), 5)) * mult;
     state.score += out.score;
     state.plays++;
     var d = today();
-    d.n++; d.sec += Math.round(Math.min(Math.max(t.secs || 0, 1), 120));
+    d.n++; d.sec += Math.round(Math.min(Math.max(t.secs || 0, 1), t.text ? 600 : 120));
     addGems(out.gems);
     if (!d.goal && d.n >= state.set.goal) { d.goal = 1; addGems(10); out.goal = true; }
     out.badges = checkBadges();
@@ -374,6 +406,7 @@
     get syncStatus() { return remote.status; },
     today: today, lastDays: lastDays, streak: streak,
     rec: rec, bestStars: bestStars, stage: stage, avgAcc: avgAcc, weakChars: weakChars, totals: totals,
+    trec: trec, textStars: textStars, textStage: textStage, textTotals: textTotals,
     rank: rank, recordTask: recordTask, recordLevel: recordLevel,
     levelUnlocked: levelUnlocked, worldProgress: worldProgress, nextLevel: nextLevel,
     buy: buy, equip: equip, setOpt: setOpt, reset: reset

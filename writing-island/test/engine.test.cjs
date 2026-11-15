@@ -1,7 +1,7 @@
 /* 引擎测试：模拟书写，检查描红判定和默写识别。 node test/engine.test.cjs */
 const fs = require('fs'), vm = require('vm'), path = require('path');
-for (const f of ['glyphs.js', 'engine.js']) vm.runInThisContext(fs.readFileSync(path.join(__dirname, '../src', f), 'utf8'));
-const { Glyphs: Gl, Engine: En } = globalThis.WI;
+for (const f of ['glyphs.js', 'engine.js', 'words.js']) vm.runInThisContext(fs.readFileSync(path.join(__dirname, '../src', f), 'utf8'));
+const { Glyphs: Gl, Engine: En, Words: Wd } = globalThis.WI;
 
 let seed = 12345;
 const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
@@ -131,6 +131,35 @@ function seg(x1, y1, x2, y2) { return [{ x: x1, y: y1 }, { x: x2, y: y2 }]; }
   const g = Gl.get('L'), sess = new En.TraceSession(g, { tol: 12.5 });
   const r = feed(sess, seg(70, 20, 70, 60));
   check(r.discard && r.reason === 'start' && sess.mistakes === 1, 'wrong start flagged');
+}
+
+/* ---------- 单词和句子：排版 + 整句描红 ---------- */
+{
+  const texts = [];
+  for (const g of Wd.WORDS.concat(Wd.SENTS)) for (const [t] of g.items) texts.push(t);
+  // 内容里的每个字符都要有笔画数据
+  for (const t of texts) for (const c of t) check(c === ' ' || !!Gl.get(c), 'no glyph for ' + JSON.stringify(c) + ' in ' + t);
+  // 短的排一行，长句子折成几行，而且都放得进板子
+  const W = 880, H = 700;
+  check(Gl.fit('cat', 'print', W, H).comp.rows === 1 && Gl.fit("Let's go!", 'print', W, H).comp.rows === 1, 'short text stays on one line');
+  const long = Gl.fit('After school I do my homework and then play with my dog.', 'hand', W, H);
+  check(long.comp.rows >= 3 && long.scale > 0.6, 'long sentence wraps: rows ' + long.comp.rows + ' scale ' + long.scale.toFixed(2));
+  for (const st of Gl.STYLES) {
+    let undone = 0, low = 0, n = 0;
+    for (const t of texts) {
+      const f = Gl.fit(t, st.id, W, H);
+      check(f.comp.width * f.scale <= W + 1 && f.comp.rows * Gl.ROW * f.scale <= H + 1, `[${st.id}] ${t} does not fit`);
+      check(f.comp.letters.length === t.replace(/ /g, '').length, `[${st.id}] ${t} letter count`);
+      const tol = Math.min(20, Math.max(12.5, 10 / f.scale));
+      const sess = new En.TraceSession(f.comp, { tol });
+      for (const stroke of f.comp.strokes) feed(sess, wobble(stroke.pts, 2.5));
+      n++;
+      if (!sess.done) { undone++; console.log('  未完成:', st.id, t, 'si', sess.si, '/', f.comp.strokes.length); }
+      else if (sess.result.stars < 3) low++;
+    }
+    console.log(`整句描红 [${st.id}] ${n} 条：未完成 ${undone}，不到三星 ${low}`);
+    check(undone === 0 && low === 0, `[${st.id}] text tracing`);
+  }
 }
 
 /* ---------- 默写识别 ---------- */

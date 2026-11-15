@@ -22,6 +22,7 @@
   --sun: #FFC533;          /* 星星 */
   --sun-deep: #D98C00;
   --sun-soft: #FFF2CC;
+  --gold: #F2A400;         /* 句子岛 */
   --coral: #FF6B57;        /* 数字岛、基线 */
   --coral-deep: #D64835;
   --sea: #2B8CFF;          /* 大写岛、主色 */
@@ -135,7 +136,13 @@ h1, h2, h3 { text-wrap: balance; }
 .font-btn small { font-size: 12px; line-height: 1; color: var(--ink-2); }
 .font-btn b { font: 18px/1 var(--f-display); font-weight: 400; white-space: nowrap; }
 .font-btn .ic { width: 20px; height: 20px; color: var(--ink-2); }
-.islands { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.islands { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 16px; }
+.island { grid-column: span 2; }
+.island.island-wide { grid-column: span 3; flex-direction: row; align-items: stretch; }
+.island.island-wide .island-art { flex: none; width: 40%; display: flex; align-items: center; padding: 12px 14px; }
+.island.island-wide .island-info { flex: 1; min-width: 0; justify-content: center; }
+.w-word { --accent: var(--leaf); --accent-deep: var(--leaf-deep); }
+.w-sent { --accent: var(--gold); --accent-deep: var(--sun-deep); }
 .island { display: flex; flex-direction: column; text-align: left; background: var(--card); border-radius: 26px; overflow: hidden; box-shadow: 0 6px 0 var(--accent-deep); min-width: 0; }
 .island:active { transform: translateY(4px); box-shadow: 0 2px 0 var(--accent-deep); }
 .island-art { display: block; padding: 14px 12px 8px; background: var(--accent); color: var(--on-accent); overflow: hidden; }
@@ -182,6 +189,7 @@ h1, h2, h3 { text-wrap: balance; }
 .node.next .node-ball { animation: bob 1.5s ease-in-out infinite; }
 .node .stars { margin-top: 6px; }
 .node-label { font: 600 17px/1.3 var(--f-num); letter-spacing: .1em; color: var(--ink-2); background: var(--card); padding: 2px 12px; border-radius: 12px; }
+.node-label.node-title { font: 16px/1.35 var(--f-display); letter-spacing: 0; text-align: center; }
 .node.boss .node-label { font-family: var(--f-display); font-weight: 400; letter-spacing: 0; }
 
 /* ---------- 练字 ---------- */
@@ -206,6 +214,8 @@ h1, h2, h3 { text-wrap: balance; }
 .model { display: flex; justify-content: center; width: 100%; padding: 4px 0; color: var(--ink); }
 .model .gl { height: 150px; }
 .model .gl-lower { height: 202px; }
+.is-text .model .gl { width: 100%; height: auto; max-height: min(46vh, 330px); }
+.is-text .prompt-text { font: 17px/1.35 var(--f-body); color: var(--ink-2); text-align: center; white-space: normal; }
 .model .gl-rule line { stroke: var(--sea); }
 .model .gl-rule .base { stroke: var(--coral); opacity: .9; }
 .prompt-text { font: 22px/1.2 var(--f-display); }
@@ -221,22 +231,24 @@ h1, h2, h3 { text-wrap: balance; }
 
 .board-wrap { position: relative; min-width: 0; min-height: 0; border-radius: 26px; overflow: hidden; box-shadow: 0 6px 0 var(--line); }
 .board-wrap.shake { animation: shake .32s; }
+/* 单词、句子写完后，成绩条不盖住最后一行：写字板让出成绩条的高度 */
+.board-wrap.lift .board { bottom: var(--banner-h, 0px); }
 .board {
   --b-paper: #FFFFFF; --b-line: #A9CDF2; --b-base: #FF8474; --b-road: #E4EBF6; --b-dash: #9FB0CC;
   --b-fill: #FFE08A; --b-ink: #22335C; --b-wrong: #F4A0B0; --b-start: #1FAE70; --b-next: #9FB0CC;
-  --b-demo: #2B8CFF; --b-ghost: rgba(43, 140, 255, .22);
+  --b-demo: #2B8CFF; --b-ghost: rgba(43, 140, 255, .22); --b-bad: #E5486A;
   position: absolute; inset: 0; background: var(--b-paper); touch-action: none; cursor: crosshair;
 }
 .board[data-skin="mint"] { --b-paper: #EAF6E1; --b-line: #9CCB9A; --b-base: #F08A6C; --b-road: #D3E7C8; --b-dash: #86A886; --b-next: #86A886; }
 .board[data-skin="chalk"] {
   --b-paper: #22463F; --b-line: rgba(255, 255, 255, .42); --b-base: #FFAE9C; --b-road: rgba(255, 255, 255, .15); --b-dash: rgba(255, 255, 255, .58);
   --b-fill: rgba(255, 214, 102, .45); --b-ink: #FBFBF2; --b-wrong: #FF9BAE; --b-start: #57D9A0; --b-next: rgba(255, 255, 255, .5);
-  --b-demo: #7CC4FF; --b-ghost: rgba(124, 196, 255, .35);
+  --b-demo: #7CC4FF; --b-ghost: rgba(124, 196, 255, .35); --b-bad: #FF8FA3;
 }
 .board[data-skin="night"] {
   --b-paper: #121A3E; --b-line: rgba(160, 190, 255, .42); --b-base: #FF9A8A; --b-road: rgba(160, 190, 255, .17); --b-dash: rgba(190, 210, 255, .62);
   --b-fill: rgba(255, 214, 102, .5); --b-ink: #F3F6FF; --b-wrong: #FF9BAE; --b-start: #57D9A0; --b-next: rgba(190, 210, 255, .55);
-  --b-demo: #7CC4FF; --b-ghost: rgba(124, 196, 255, .35);
+  --b-demo: #7CC4FF; --b-ghost: rgba(124, 196, 255, .35); --b-bad: #FF8FA3;
   background-image: radial-gradient(#FFFFFF 1px, transparent 1.6px), radial-gradient(rgba(255, 255, 255, .6) 1px, transparent 1.4px);
   background-size: 130px 110px, 90px 150px; background-position: 20px 30px, 60px 80px;
 }
@@ -245,6 +257,9 @@ h1, h2, h3 { text-wrap: balance; }
 .b-line.l-mid { stroke-dasharray: 10 8; }
 .b-line.l-base { stroke: var(--b-base); stroke-width: 3; }
 .b-slant { stroke: var(--b-line); stroke-width: 1.5; opacity: .42; }
+.b-slot { stroke: var(--b-dash); stroke-width: 5; stroke-linecap: round; }
+.b-slot.ok { stroke: var(--b-start); }
+.b-slot.bad { stroke: var(--b-bad); }
 .g-road, .g-fill, .g-ghost { fill: none; stroke-width: 15; stroke-linecap: round; stroke-linejoin: round; }
 .g-road { stroke: var(--b-road); }
 .g-fill { stroke: var(--b-fill); }
@@ -295,6 +310,23 @@ h1, h2, h3 { text-wrap: balance; }
 .tile.st1 { background: var(--card) linear-gradient(to top, var(--soft) 34%, transparent 34%); }
 .tile.st2 { background: var(--card) linear-gradient(to top, var(--soft) 67%, transparent 67%); }
 .tile.st3 { background: var(--soft); box-shadow: 0 4px 0 var(--accent); }
+.tiles-word { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+.tile-word { gap: 4px; padding: 12px 10px 10px; }
+.zh { font-size: 14px; color: var(--ink-2); line-height: 1.3; }
+.sents { display: flex; flex-direction: column; gap: 10px; padding: 2px 2px 6px; }
+.sent { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px 14px; padding: 12px 16px; border-radius: 18px; background: var(--card); color: var(--ink); box-shadow: 0 4px 0 var(--line); text-align: left; }
+.sent:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--line); }
+.sent .zh { grid-column: 1; }
+.sent .stars { grid-column: 2; grid-row: 1 / span 2; }
+.sent.st1 { background: var(--card) linear-gradient(to right, var(--soft) 34%, transparent 34%); }
+.sent.st2 { background: var(--card) linear-gradient(to right, var(--soft) 67%, transparent 67%); }
+.sent.st3 { background: var(--soft); box-shadow: 0 4px 0 var(--accent); }
+.card .tiles, .card .sents { padding: 0; }
+.card .tile, .card .sent { background-color: var(--soft); box-shadow: none; }
+.card .tile.st1, .card .sent.st1 { background: #CFE4FF; }
+.card .tile.st2, .card .sent.st2 { background: #8FC0FF; }
+.card .tile.st3, .card .sent.st3 { background: var(--sea); color: var(--on-accent); }
+.card .st3 .zh { color: var(--on-accent); }
 
 /* ---------- 成长记录 ---------- */
 .pg { display: flex; flex-direction: column; gap: 14px; }
@@ -380,6 +412,9 @@ h1, h2, h3 { text-wrap: balance; }
 .result-stats div { background: var(--soft); border-radius: 16px; padding: 10px 6px; }
 .result-stats b { display: block; font: 600 26px/1.2 var(--f-num); }
 .result-stats span { font-size: 13px; color: var(--ink-2); }
+.result-para { width: 100%; background: var(--soft); border-radius: 16px; padding: 12px 14px; color: var(--ink); }
+.result-para .gl { width: 100%; height: auto; }
+.result-para p { color: var(--ink-2); font-size: 14px; padding-top: 6px; text-align: left; }
 .result-act { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; padding-top: 4px; }
 .result-act .btn-soft, .ask-act .btn-soft, .reset-ask .btn-soft, .opt-reset > .btn-soft { background: var(--soft); }
 .ask { display: flex; flex-direction: column; gap: 10px; }
@@ -466,10 +501,18 @@ h1, h2, h3 { text-wrap: balance; }
   .tools { grid-area: tools; margin-top: 0; grid-template-columns: 1fr 1fr 1.5fr; }
   .tools .btn-go { grid-column: auto; min-height: 56px; font-size: 22px; }
   .tools:has(#btnCheck[hidden]) { grid-template-columns: 1fr 1fr; }
+  .tools:has(#btnDemo[hidden]) { grid-template-columns: 1fr 1.5fr; }
+  /* 单词、句子：示范要占一整行才看得清，伙伴的话放到它下面 */
+  .is-text .play-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr) auto; grid-template-areas: "prompt" "buddy" "board" "tools"; }
+  .is-text .prompt { flex-direction: column; align-items: stretch; padding: 30px 60px 8px 12px; gap: 2px; }
+  .is-text .model { padding: 0; }
+  .is-text .model .gl { height: auto; max-height: 150px; margin: 0; }
+  .is-text .prompt-text { display: block; text-align: left; font-size: 15px; }
 }
 @media (max-width: 760px) {
   .islands { grid-template-columns: minmax(0, 1fr); gap: 14px; }
-  .island { flex-direction: row; align-items: stretch; }
+  .island, .island.island-wide { grid-column: auto; flex-direction: row; align-items: stretch; }
+  .island.island-wide .island-art { width: 132px; padding: 10px 8px; }
   .island-art { flex: none; width: 132px; display: flex; align-items: center; padding: 10px 8px; }
   .island-info { flex: 1; min-width: 0; padding: 12px 14px; gap: 6px; }
   .island-name { font-size: 22px; }
@@ -642,6 +685,13 @@ h1, h2, h3 { text-wrap: balance; }
   G['y'] = ['M26 50 L50 100', 'M74 50 L26 150'];
   G['z'] = ['M26 50 L74 50 L26 100 L74 100'];
 
+  /* ---------- 标点（写句子时用） ---------- */
+  G['.'] = ['M50 93 L50 94'];
+  G[','] = ['M53 90 C55 100 51 108 43 114'];
+  G['!'] = ['M50 0 L50 66', 'M50 93 L50 94'];
+  G['?'] = [A(50, 25, 24, 25, -165, 215) + ' C58 50 50 54 50 62 L50 68', 'M50 93 L50 94'];
+  G["'"] = ['M52 0 L48 22'];
+
   /* ---------- 手写体：收笔带一个向右的小尾巴，y 写成 u 加一个钩 ---------- */
   // 从竖画 x 处往下，在基线上向右甩出一个小尾巴
   function tail(x) {
@@ -782,7 +832,95 @@ h1, h2, h3 { text-wrap: balance; }
   function kindOf(ch) {
     if (ch >= '0' && ch <= '9') return 'num';
     if (ch >= 'A' && ch <= 'Z') return 'upper';
-    return 'lower';
+    if (ch >= 'a' && ch <= 'z') return 'lower';
+    return 'punct';
+  }
+
+  /* ---------- 排版：把单词、句子排到四线格上 ----------
+     ROW 是一行四线格连同行距的高度。compose 返回一个“合成字形”：
+     strokes 是所有字母的笔画（已经挪到各自的位置，按书写顺序），letters 记着每个字母占的位置。
+     描红引擎只看 strokes，所以一个字母、一个单词、一整句话用的是同一套判定。 */
+  var ROW = 196, SPACE = 46, GAP = 16, MINW = 24;
+  var COMFY = 1.15;               // 每个字格单位 1.15 像素以上，字就够大了
+  function advance(g) { return Math.max(g.box.maxX - g.box.minX, MINW); }
+  function wordWidth(word, styleId) {
+    var w = 0;
+    for (var i = 0; i < word.length; i++) {
+      var g = glyph(word[i], styleId);
+      if (!g) continue;
+      w += (w ? (kindOf(word[i]) === 'punct' ? GAP / 2 : GAP) : 0) + advance(g);
+    }
+    return w;
+  }
+  // 按最大行宽折行，返回每行的单词
+  function wrap(text, styleId, maxW) {
+    var lines = [], cur = [], curW = 0, widest = 0;
+    text.split(' ').forEach(function (word) {
+      if (!word) return;
+      var ww = wordWidth(word, styleId);
+      if (cur.length && maxW && curW + SPACE + ww > maxW) { lines.push(cur); widest = Math.max(widest, curW); cur = []; curW = 0; }
+      curW += (cur.length ? SPACE : 0) + ww;
+      cur.push(word);
+    });
+    if (cur.length) { lines.push(cur); widest = Math.max(widest, curW); }
+    return { lines: lines, width: widest };
+  }
+  function compose(text, styleId, maxW) {
+    var st = styleOf(styleId || current);
+    if (text.length === 1) {              // 单个字符：保持在原来的 0..100 格子里
+      var g1 = glyph(text, st.id);
+      return {
+        text: text, style: st.id, single: true, rows: 1, width: 100, height: 150,
+        letters: [{ ch: text, x: 0, y: 0, row: 0, x0: 0, x1: 100, g: g1, first: 0, n: g1.strokes.length }],
+        strokes: g1.strokes.map(function (s, k) { return { pts: s.pts, dot: s.dot, len: s.len, d: s.d, letter: 0, k: k }; })
+      };
+    }
+    var w = wrap(text, st.id, maxW), letters = [], strokes = [];
+    w.lines.forEach(function (words, r) {
+      var x = 0;
+      words.forEach(function (word, wi) {
+        if (wi) x += SPACE;
+        for (var i = 0; i < word.length; i++) {
+          var g = glyph(word[i], st.id);
+          if (!g) continue;
+          if (i) x += kindOf(word[i]) === 'punct' ? GAP / 2 : GAP;
+          var gw = advance(g), bw = g.box.maxX - g.box.minX;
+          var dx = x + (gw - bw) / 2 - g.box.minX, dy = r * ROW;
+          var L = { ch: word[i], x: dx, y: dy, row: r, x0: x, x1: x + gw, g: g, first: strokes.length, n: g.strokes.length };
+          g.strokes.forEach(function (s, k) {
+            strokes.push({
+              pts: s.pts.map(function (p) { return { x: p.x + dx, y: p.y + dy }; }),
+              dot: s.dot, len: s.len, d: s.d, letter: letters.length, k: k
+            });
+          });
+          letters.push(L);
+          x += gw;
+        }
+      });
+    });
+    return { text: text, style: st.id, single: false, rows: w.lines.length, width: w.width, height: (w.lines.length - 1) * ROW + 150, letters: letters, strokes: strokes };
+  }
+  // 在 W×H（像素）的板子上，折成几行字最大：返回 {comp, scale}
+  function fit(text, styleId, W, H, cap) {
+    var st = styleOf(styleId || current);
+    if (text.length === 1) return { comp: compose(text, st.id), scale: Math.min(H / ROW, W / 150) };
+    var one = wrap(text, st.id, 0), longest = 0;
+    text.split(' ').forEach(function (word) { longest = Math.max(longest, wordWidth(word, st.id)); });
+    var best = null;
+    for (var r = 1; r <= 7; r++) {
+      var lo = longest, hi = Math.max(one.width, longest);
+      for (var it = 0; it < 14; it++) {
+        var mid = (lo + hi) / 2;
+        if (wrap(text, st.id, mid).lines.length <= r) hi = mid; else lo = mid;
+      }
+      var wr = wrap(text, st.id, hi);
+      var sc = Math.min(W / (wr.width + 60), H / (wr.lines.length * ROW));
+      if (cap) sc = Math.min(sc, cap);
+      // 字已经够大就不再多折一行；不够大时，多一行至少要大 8% 才值得
+      if (!best || (best.scale < COMFY && sc > best.scale * 1.08)) best = { maxW: hi, scale: sc, rows: wr.lines.length };
+      if (wr.lines.length < r) break;
+    }
+    return { comp: compose(text, st.id, best.maxW), scale: best.scale };
   }
 
   // 某个字符所有“算对”的写法（各种字体 + 其他常见写法），每种是 [[{x,y}...], ...]。默写识别用。
@@ -803,7 +941,7 @@ h1, h2, h3 { text-wrap: balance; }
 
   root.WI = root.WI || {};
   root.WI.Glyphs = {
-    get: glyph, variants: variants, kindOf: kindOf,
+    get: glyph, variants: variants, kindOf: kindOf, compose: compose, fit: fit, wrap: wrap, ROW: ROW,
     STYLES: STYLES, styleOf: styleOf,
     style: function () { return styleOf(current); },
     setStyle: function (id) { current = styleOf(id).id; },
@@ -1152,15 +1290,38 @@ h1, h2, h3 { text-wrap: balance; }
   }
 
   function recognize(strokes, target, pre) {
-    var sa = pre || scoreAll(strokes);
-    if (!sa) return { ok: false, reason: 'empty' };
-    var c = sa;
+    var c, sT, best = 1e9, bestCh = null, ch;
+    if (pre) {
+      c = pre; sT = pre.scores[target];
+      for (ch in pre.scores) {
+        if (ch !== target && !mates(ch, target) && pre.scores[ch] < best) { best = pre.scores[ch]; bestCh = ch; }
+      }
+    } else {
+      c = toCloud(strokes);
+      if (!c) return { ok: false, reason: 'empty' };
+      var T = getTemplates(), i, v, cl;
+      sT = 1e9;
+      for (i = 0; i < T.length; i++) {
+        if (T[i].ch !== target) continue;
+        for (v = 0; v < T[i].clouds.length; v++) sT = Math.min(sT, shapeScore(c.pts, T[i].clouds[v]));
+      }
+      // 只有比“像目标”更像的别的字符才会影响结论，所以先用便宜的下界把大多数模板筛掉
+      // （一句话几十个字母要逐个查，这一步让检查快很多）
+      var bound = sT;
+      for (i = 0; i < T.length; i++) {
+        if (T[i].ch === target || mates(T[i].ch, target)) continue;
+        for (v = 0; v < T[i].clouds.length; v++) {
+          cl = T[i].clouds[v];
+          var far = Math.max(farPart(c.pts, cl), farPart(cl, c.pts));
+          if (far >= bound) continue;
+          var sc = far + cloudMatch(c.pts, cl);
+          if (sc < bound) { bound = sc; best = sc; bestCh = T[i].ch; }
+        }
+      }
+    }
     var w = c.box.maxX - c.box.minX, h = c.box.maxY - c.box.minY;
     if (Math.max(w, h) < 10) return { ok: false, reason: 'tiny' };
-    var tpl = Gl.get(target), sT = sa.scores[target], best = 1e9, bestCh = null;
-    for (var ch in sa.scores) {
-      if (ch !== target && !mates(ch, target) && sa.scores[ch] < best) { best = sa.scores[ch]; bestCh = ch; }
-    }
+    var tpl = Gl.get(target);
     var ok = sT <= REC.pass && sT <= best * REC.ratio + REC.slack;
     var res = { ok: ok, s: sT, best: best, bestCh: bestCh };
     if (!ok) {
@@ -1193,11 +1354,60 @@ h1, h2, h3 { text-wrap: balance; }
 })(typeof window !== 'undefined' ? window : globalThis);
 
 /*
+ * 写字岛 — 单词和句子
+ *
+ * 每一项是 [英文, 中文意思]。句子按单词数从少到多排：两个词 → 十二个词 → 连成一小段话。
+ * 只能用字母、数字、空格和 . , ? ! ' 这几个标点（笔画数据里有的字符）。
+ */
+(function (root) {
+  'use strict';
+
+  var WORDS = [
+    { title: '你我他', items: [['I', '我'], ['you', '你'], ['he', '他'], ['she', '她'], ['we', '我们']] },
+    { title: '是不是', items: [['am', '（我）是'], ['is', '（他、她）是'], ['are', '（你、我们）是'], ['yes', '是的'], ['no', '不']] },
+    { title: '小小词', items: [['a', '一个'], ['the', '这个'], ['and', '和'], ['my', '我的'], ['it', '它']] },
+    { title: '动一动', items: [['go', '去'], ['see', '看见'], ['like', '喜欢'], ['have', '有'], ['play', '玩']] },
+    { title: '一家人', items: [['mom', '妈妈'], ['dad', '爸爸'], ['baby', '宝宝'], ['boy', '男孩'], ['girl', '女孩']] },
+    { title: '小动物', items: [['cat', '猫'], ['dog', '狗'], ['bird', '鸟'], ['fish', '鱼'], ['duck', '鸭子']] },
+    { title: '颜色', items: [['red', '红色'], ['blue', '蓝色'], ['green', '绿色'], ['pink', '粉色'], ['yellow', '黄色']] },
+    { title: '好吃的', items: [['apple', '苹果'], ['milk', '牛奶'], ['egg', '鸡蛋'], ['cake', '蛋糕'], ['rice', '米饭']] },
+    { title: '上学去', items: [['book', '书'], ['pen', '钢笔'], ['bag', '书包'], ['desk', '书桌'], ['school', '学校']] },
+    { title: '数一数', items: [['one', '一'], ['two', '二'], ['three', '三'], ['four', '四'], ['five', '五']] },
+    { title: '打招呼', items: [['hello', '你好'], ['hi', '嗨'], ['bye', '再见'], ['please', '请'], ['thanks', '谢谢']] },
+    { title: '常用词', items: [['this', '这个'], ['that', '那个'], ['can', '能'], ['in', '在…里面'], ['on', '在…上面']] },
+    { title: '什么样', items: [['big', '大的'], ['small', '小的'], ['good', '好的'], ['happy', '开心的'], ['new', '新的']] }
+  ];
+
+  var SENTS = [
+    { title: '两个词', items: [['Thank you.', '谢谢你。'], ['Good morning.', '早上好。'], ["Let's go!", '我们走吧！'], ['Good job!', '做得好！']] },
+    { title: '三个词', items: [['I am happy.', '我很开心。'], ['I like cats.', '我喜欢猫。'], ['Yes, I can.', '是的，我可以。'], ['How are you?', '你好吗？']] },
+    { title: '四个词', items: [['This is my mom.', '这是我妈妈。'], ['I have a dog.', '我有一只狗。'], ['What is your name?', '你叫什么名字？']] },
+    { title: '五个词', items: [['I can see a bird.', '我能看见一只鸟。'], ['My bag is very big.', '我的书包很大。'], ['I like to read books.', '我喜欢看书。']] },
+    { title: '六个词', items: [['I go to school by bus.', '我坐公交车去上学。'], ['My dog likes to play ball.', '我的狗喜欢玩球。'], ['We have a new red kite.', '我们有一只新的红风筝。']] },
+    { title: '七八个词', items: [['I like to read books with my mom.', '我喜欢和妈妈一起看书。'], ['There is a big tree in the park.', '公园里有一棵大树。'], ['We play football after school on Friday.', '星期五放学后我们踢足球。']] },
+    { title: '九十个词', items: [['My name is Amy and I am seven years old.', '我叫艾米，今年七岁。'], ['I get up at seven and go to school.', '我七点起床，然后去上学。'], ['My dad and I like to play in the park.', '我和爸爸喜欢在公园里玩。']] },
+    { title: '十二个词', items: [['On Sunday I go to the park with my mom and dad.', '星期天我和爸爸妈妈去公园。'], ['After school I do my homework and then play with my dog.', '放学后我先做作业，然后和我的狗玩。'], ['I like my school because my teachers and friends are very nice.', '我喜欢我的学校，因为老师和朋友们都很好。']] },
+    // 最后两关：把几句话连起来，自己写出一小段
+    { title: '一段话：介绍自己', para: true, items: [['My name is Amy.', '我叫艾米。'], ['I am seven years old.', '我七岁了。'], ['I have a small dog.', '我有一只小狗。'], ['I like to play with my dog after school.', '放学后我喜欢和我的狗一起玩。']] },
+    { title: '一段话：我的一天', para: true, items: [['I get up at seven.', '我七点起床。'], ['I go to school with my friends.', '我和朋友们一起去上学。'], ['After school I read books and play football.', '放学后我看书、踢足球。'], ['I go to bed at nine.', '我九点睡觉。']] }
+  ];
+
+  var zh = {};
+  WORDS.concat(SENTS).forEach(function (g) { g.items.forEach(function (it) { zh[it[0]] = it[1]; }); });
+
+  function wordCount(text) { return text.split(' ').length; }
+  function letterCount(text) { return text.replace(/ /g, '').length; }
+
+  root.WI = root.WI || {};
+  root.WI.Words = { WORDS: WORDS, SENTS: SENTS, zh: zh, wordCount: wordCount, letterCount: letterCount };
+})(typeof window !== 'undefined' ? window : globalThis);
+
+/*
  * 写字岛 — 存档、关卡、奖励、商店、成就
  */
 (function (root) {
   'use strict';
-  var Gl = root.WI.Glyphs;
+  var Gl = root.WI.Glyphs, Wd = root.WI.Words;
   var KEY = 'writing-island-v1';
 
   /* ---------- 关卡 ---------- */
@@ -1209,14 +1419,28 @@ h1, h2, h3 { text-wrap: balance; }
   var WORLDS = [
     { id: 'num', name: '数字岛', short: '数字', sample: '123', range: '0 – 9', chars: Gl.DIGITS, groups: [['1', '2', '3'], ['4', '5', '6'], ['7', '8', '9', '0']], bossN: 10 },
     { id: 'upper', name: '大写字母岛', short: '大写', sample: 'ABC', range: 'A – Z', chars: Gl.UPPER, groups: chunk(Gl.UPPER, 3), bossN: 8 },
-    { id: 'lower', name: '小写字母岛', short: '小写', sample: 'abc', range: 'a – z', chars: Gl.LOWER, groups: chunk(Gl.LOWER, 3), bossN: 8 }
+    { id: 'lower', name: '小写字母岛', short: '小写', sample: 'abc', range: 'a – z', chars: Gl.LOWER, groups: chunk(Gl.LOWER, 3), bossN: 8 },
+    // 单词和句子：text 为真，关卡里放的是一串文字而不是单个字符
+    { id: 'word', name: '单词岛', short: '单词', sample: 'cat', text: true, groups: Wd.WORDS, bossN: 6 },
+    { id: 'sent', name: '句子岛', short: '句子', sample: 'I can.', text: true, groups: Wd.SENTS, bossN: 0 }
   ];
   var LEVELS = {};
   WORLDS.forEach(function (w) {
-    w.levels = w.groups.map(function (chars, i) {
-      return { id: w.id + '-' + (i + 1), world: w.id, n: i + 1, chars: chars, boss: false };
-    });
-    w.levels.push({ id: w.id + '-boss', world: w.id, n: w.levels.length + 1, chars: w.chars, boss: true, bossN: w.bossN });
+    if (w.text) {
+      w.texts = [];
+      w.levels = w.groups.map(function (g, i) {
+        var texts = g.items.map(function (it) { return it[0]; });
+        w.texts = w.texts.concat(texts);
+        // para：几句话连成一小段，直接自己写，不先描红
+        return { id: w.id + '-' + (i + 1), world: w.id, n: i + 1, texts: texts, title: g.title, boss: !!g.para, para: !!g.para };
+      });
+      if (w.bossN) w.levels.push({ id: w.id + '-boss', world: w.id, n: w.levels.length + 1, texts: w.texts, title: '大挑战', boss: true, bossN: w.bossN });
+    } else {
+      w.levels = w.groups.map(function (chars, i) {
+        return { id: w.id + '-' + (i + 1), world: w.id, n: i + 1, chars: chars, boss: false };
+      });
+      w.levels.push({ id: w.id + '-boss', world: w.id, n: w.levels.length + 1, chars: w.chars, boss: true, bossN: w.bossN });
+    }
     w.levels.forEach(function (l) { LEVELS[l.id] = l; });
   });
   function world(id) { return WORLDS.filter(function (w) { return w.id === id; })[0]; }
@@ -1261,6 +1485,7 @@ h1, h2, h3 { text-wrap: balance; }
     return {
       v: 1, gems: 0, gemsEarned: 0, score: 0, plays: 0, combo: 0,
       chars: {},      // ch → { n, s:[描红,虚线,自己写 最高星], a:[最近的准确度], t:时间戳 }
+      texts: {},      // 单词或句子 → 同样的记录
       levels: {},     // 关卡 id → 最高星
       days: {},       // 'YYYY-MM-DD' → { n, sec, g, goal }
       owned: { pen: ['ink'], board: ['paper'], buddy: ['panda'] },
@@ -1421,6 +1646,19 @@ h1, h2, h3 { text-wrap: balance; }
     list.sort(function (x, y) { return x.acc - y.acc; });
     return list.slice(0, limit || 6);
   }
+  // 单词、句子的记录
+  function trec(text) { return state.texts[text] || { n: 0, s: [0, 0, 0], a: [], t: 0 }; }
+  function textStars(text) { var r = trec(text); return Math.max(r.s[0], r.s[1], r.s[2]); }
+  function textStage(text) {
+    var r = trec(text);
+    return r.s[2] >= 2 ? 3 : (r.s[1] > 0 || r.s[2] > 0) ? 2 : r.s[0] > 0 ? 1 : 0;
+  }
+  function textTotals(worldId) {
+    var w = world(worldId), done = 0;
+    w.texts.forEach(function (t) { if (textStage(t) === 3) done++; });
+    return { done: done, all: w.texts.length };
+  }
+
   function totals() {
     var stars = 0, learned = 0, tried = 0;
     Gl.ALL.forEach(function (ch) {
@@ -1449,15 +1687,17 @@ h1, h2, h3 { text-wrap: balance; }
   }
   function count(fn) { var n = 0; Gl.ALL.forEach(function (ch) { if (fn(ch)) n++; }); return n; }
   var BADGES = [
-    { id: 'first', name: '第一笔', desc: '写完第一个字', test: function () { return state.plays >= 1; } },
-    { id: 'p100', name: '百字小将', desc: '累计写满 100 个字', test: function () { return state.plays >= 100; } },
-    { id: 'p500', name: '五百字英雄', desc: '累计写满 500 个字', test: function () { return state.plays >= 500; } },
+    { id: 'first', name: '第一笔', desc: '完成第一次练习', test: function () { return state.plays >= 1; } },
+    { id: 'p100', name: '百次小将', desc: '累计练习 100 次', test: function () { return state.plays >= 100; } },
+    { id: 'p500', name: '五百次英雄', desc: '累计练习 500 次', test: function () { return state.plays >= 500; } },
     { id: 's10', name: '三星收集者', desc: '10 个字拿到三颗星', test: function () { return count(function (c) { return bestStars(c) === 3; }) >= 10; } },
     { id: 'sAll', name: '满天星', desc: '62 个字全部三颗星', test: function () { return count(function (c) { return bestStars(c) === 3; }) >= 62; } },
     { id: 'w20', name: '脱稿高手', desc: '20 个字能自己写出来', test: function () { return count(function (c) { return stage(c) === 3; }) >= 20; } },
     { id: 'num', name: '数字岛岛主', desc: '通关数字岛', test: function () { return worldCleared('num'); } },
     { id: 'upper', name: '大写岛岛主', desc: '通关大写字母岛', test: function () { return worldCleared('upper'); } },
     { id: 'lower', name: '小写岛岛主', desc: '通关小写字母岛', test: function () { return worldCleared('lower'); } },
+    { id: 'word', name: '单词岛岛主', desc: '通关单词岛', test: function () { return worldCleared('word'); } },
+    { id: 'sent', name: '会写一段话', desc: '通关句子岛', test: function () { return worldCleared('sent'); } },
     { id: 'd3', name: '坚持 3 天', desc: '连续 3 天来练字', test: function () { return streak() >= 3; } },
     { id: 'd7', name: '坚持一周', desc: '连续 7 天来练字', test: function () { return streak() >= 7; } },
     { id: 'g200', name: '宝石收藏家', desc: '累计获得 200 颗宝石', test: function () { return state.gemsEarned >= 200; } }
@@ -1476,27 +1716,29 @@ h1, h2, h3 { text-wrap: balance; }
   }
 
   /*
-   * 记一次书写。task: {ch, mode, stars, acc(0..1), secs, assisted}
+   * 记一次书写。task: {ch 或 text, mode, stars, acc(0..1), secs}
    * 返回 {gems, score, record(刷新最高星), goal(今天目标刚达成), badges[]}
    */
   function recordTask(t) {
     var mi = MODES.indexOf(t.mode);
-    var r = state.chars[t.ch] || (state.chars[t.ch] = { n: 0, s: [0, 0, 0], a: [], t: 0 });
+    var book = t.text ? state.texts : state.chars, key = t.text || t.ch;
+    var mult = t.text ? 1 + Math.floor(Wd.letterCount(t.text) / 10) : 1;      // 句子越长，宝石和分数越多
+    var r = book[key] || (book[key] = { n: 0, s: [0, 0, 0], a: [], t: 0 });
     r.n++; r.t = Date.now();
     r.a.push(Math.round(t.acc * 100));
     if (r.a.length > 12) r.a.shift();
-    var out = { gems: t.stars, score: 0, record: false, goal: false, badges: [] };
+    var out = { gems: t.stars * mult, score: 0, record: false, goal: false, badges: [] };
     if (t.stars > r.s[mi]) {
       if (t.stars === 3) { out.gems += 2; out.record = true; }
       r.s[mi] = t.stars;
     }
     state.combo = t.stars === 3 ? state.combo + 1 : 0;
     out.combo = state.combo;
-    out.score = 50 + Math.round(t.acc * 100) + (t.stars === 3 ? 50 : 0) + 10 * Math.min(Math.max(state.combo - 1, 0), 5);
+    out.score = (50 + Math.round(t.acc * 100) + (t.stars === 3 ? 50 : 0) + 10 * Math.min(Math.max(state.combo - 1, 0), 5)) * mult;
     state.score += out.score;
     state.plays++;
     var d = today();
-    d.n++; d.sec += Math.round(Math.min(Math.max(t.secs || 0, 1), 120));
+    d.n++; d.sec += Math.round(Math.min(Math.max(t.secs || 0, 1), t.text ? 600 : 120));
     addGems(out.gems);
     if (!d.goal && d.n >= state.set.goal) { d.goal = 1; addGems(10); out.goal = true; }
     out.badges = checkBadges();
@@ -1568,6 +1810,7 @@ h1, h2, h3 { text-wrap: balance; }
     get syncStatus() { return remote.status; },
     today: today, lastDays: lastDays, streak: streak,
     rec: rec, bestStars: bestStars, stage: stage, avgAcc: avgAcc, weakChars: weakChars, totals: totals,
+    trec: trec, textStars: textStars, textStage: textStage, textTotals: textTotals,
     rank: rank, recordTask: recordTask, recordLevel: recordLevel,
     levelUnlocked: levelUnlocked, worldProgress: worldProgress, nextLevel: nextLevel,
     buy: buy, equip: equip, setOpt: setOpt, reset: reset
@@ -1666,8 +1909,23 @@ h1, h2, h3 { text-wrap: balance; }
     } catch (e) { /* 有的环境不让朗读，没关系 */ }
   }
 
+  // 朗读一个单词或一句话（内容是英文，所以总是用英文读）
+  function sayText(text) {
+    if (Store.s.set.voice === 'off') return;
+    if (Store.native({ type: 'speak', text: text, lang: 'en-US' })) return;
+    try {
+      var synth = root.speechSynthesis;
+      if (!synth || !root.SpeechSynthesisUtterance) return;
+      synth.cancel();
+      var u = new root.SpeechSynthesisUtterance(text);
+      u.lang = 'en-US';
+      u.rate = 0.8;
+      synth.speak(u);
+    } catch (e) {}
+  }
+
   root.WI.Sfx = Sfx;
-  root.WI.Voice = { say: say, promptText: promptText };
+  root.WI.Voice = { say: say, sayText: sayText, promptText: promptText };
 })(typeof window !== 'undefined' ? window : globalThis);
 
 /*
@@ -1743,25 +2001,29 @@ h1, h2, h3 { text-wrap: balance; }
     if (this._resize) root.removeEventListener('resize', this._resize);
   };
 
-  /* task: {ch, mode:'trace'|'dots'|'write', tol, size, pen, input} */
+  /* task: {ch 或 text, mode:'trace'|'dots'|'write', tol, size, pen, input}
+     ch 是单个字符；text 是单词或句子，会按板子的大小排成一行或几行。 */
   Board.prototype.setTask = function (task) {
     this.stopDemo();
     this.task = task;
-    this.glyph = Gl.get(task.ch);
-    this.ghost = false;
-    this.locked = false;
-    this.reset();
+    this.text = task.text || task.ch;
+    this.comp = null; this.glyph = null;
+    this.ghost = false; this.locked = false;
+    this.inks = []; this.active = null; this.sess = null; this.dist = 0;
+    this.marks = null; this.ghostSet = null;
     this.layout();
   };
 
   Board.prototype.reset = function () {
     var self = this;
     this.inks = []; this.active = null; this.dist = 0;
-    this.sess = null;
-    if (this.task && this.task.mode !== 'write') {
-      this.sess = new En.TraceSession(this.glyph, {
-        tol: this.task.tol,
-        onStroke: function (i) { self.updateFill(); if (self.cb.onStroke) self.cb.onStroke(i); },
+    this.sess = null; this.marks = null; this.ghostSet = null;
+    if (this.task && this.comp && this.task.mode !== 'write') {
+      // 字小的时候（长句子）按屏幕上的距离把容差放宽一点，不然笔尖稍微一偏就算出格
+      var tol = Math.min(20, Math.max(this.task.tol, 10 / this.s));
+      this.sess = new En.TraceSession(this.comp, {
+        tol: tol,
+        onStroke: function (i) { self.updateFill(); if (self.cb.onStroke) self.cb.onStroke(self.comp.strokes[i].k, i); },
         onReject: function (why, i) {
           self.inks = self.inks.filter(function (k) { if (k.si === i) { k.dead = true; return false; } return true; });
           self.redraw(); self.updateFill();
@@ -1773,7 +2035,7 @@ h1, h2, h3 { text-wrap: balance; }
   };
 
   Board.prototype.clear = function () {
-    if (!this.task) return;
+    if (!this.task || !this.comp) return;
     this.stopDemo();
     this.ghost = false; this.locked = false;
     this.reset();
@@ -1790,15 +2052,29 @@ h1, h2, h3 { text-wrap: balance; }
     this.W = r.width; this.H = r.height; this.dpr = dpr;
     this.canvas.width = Math.round(r.width * dpr);
     this.canvas.height = Math.round(r.height * dpr);
-    var f = SIZE[(this.task && this.task.size) || 'm'] || 0.8;
-    this.s = Math.min(this.H / 196, this.W / 150) * f;
-    this.ox = this.W / 2 - 50 * this.s;
-    this.oy = this.H / 2 - 75 * this.s;
+    this.bg.setAttribute('viewBox', '0 0 ' + this.W + ' ' + this.H);
+    this.fx.setAttribute('viewBox', '0 0 ' + this.W + ' ' + this.H);
+    if (!this.task) return;
+    var f = SIZE[this.task.size || 'm'] || 0.8;
+    var single = Math.min(this.H / Gl.ROW, this.W / 150) * f;      // 单个字符的大小，也是单词和句子的上限
+    var c = this.comp;
+    var started = c && (this.inks.length > 0 || (this.sess && (this.sess.si > 0 || this.sess.prog > 0)));
+    if (started) {
+      // 已经动笔了：板子大小变了（转屏、成绩条出现）也不重新折行，只是整体放大缩小，写好的笔迹跟着走
+      this.s = c.single ? single : Math.min(this.W / (c.width + 60), this.H / (c.rows * Gl.ROW), single);
+    } else {
+      var fitted = Gl.fit(this.text, null, this.W, this.H, single);
+      this.s = fitted.comp.single ? single : fitted.scale;
+      if (!c || c.rows !== fitted.comp.rows || Math.abs(c.width - fitted.comp.width) > 0.5 || c.style !== fitted.comp.style) {
+        this.comp = this.glyph = fitted.comp;
+        this.reset();
+      }
+    }
+    this.ox = this.W / 2 - this.comp.width / 2 * this.s;
+    this.oy = this.H / 2 - this.comp.height / 2 * this.s;
     var cs = root.getComputedStyle(this.host);
     this.inkColor = (cs.getPropertyValue('--b-ink') || '').trim() || '#22335C';
     this.wrongColor = (cs.getPropertyValue('--b-wrong') || '').trim() || '#F5A3B1';
-    this.bg.setAttribute('viewBox', '0 0 ' + this.W + ' ' + this.H);
-    this.fx.setAttribute('viewBox', '0 0 ' + this.W + ' ' + this.H);
     this.drawBg(); this.redraw(); this.drawFx();
   };
 
@@ -1807,63 +2083,82 @@ h1, h2, h3 { text-wrap: balance; }
   };
 
   Board.prototype.drawBg = function () {
-    var bg = this.bg, W = this.W, self = this;
+    var bg = this.bg, W = this.W, self = this, comp = this.comp, s = this.s;
     while (bg.firstChild) bg.removeChild(bg.firstChild);
-    if (!this.task) return;
-    // 四线三格：第三线（基线）是红色实线，第二线是虚线
-    [['l-top', 0], ['l-mid', 50], ['l-base', 100], ['l-bot', 150]].forEach(function (l) {
-      var y = (self.oy + l[1] * self.s).toFixed(1);
-      el('line', { 'class': 'b-line ' + l[0], x1: 0, x2: W, y1: y, y2: y }, bg);
-    });
-    // 倾斜的字体：加一组淡淡的斜线，帮孩子把每个字写成一样的斜度
-    var slant = Gl.style().slant;
-    if (slant) {
-      var t = Math.tan(slant * Math.PI / 180), gap = 40, n = Math.ceil(W / (gap * this.s) / 2) + 2;
-      for (var k = -n; k <= n; k++) {
-        var xc = 50 + k * gap;
-        el('line', {
-          'class': 'b-slant',
-          x1: (this.ox + (xc + t * Gl.PIVOT) * this.s).toFixed(1), y1: this.oy.toFixed(1),
-          x2: (this.ox + (xc + t * (Gl.PIVOT - 150)) * this.s).toFixed(1), y2: (this.oy + 150 * this.s).toFixed(1)
-        }, bg);
+    this.fills = []; this.slots = []; this._fi = 0;
+    if (!this.task || !comp) return;
+    var slant = Gl.styleOf(comp.style).slant, t = Math.tan(slant * Math.PI / 180), r;
+    for (r = 0; r < comp.rows; r++) {
+      var top = this.oy + r * Gl.ROW * s;
+      // 四线三格：第三线（基线）是红色实线，第二线是虚线
+      [['l-top', 0], ['l-mid', 50], ['l-base', 100], ['l-bot', 150]].forEach(function (l) {
+        var y = (top + l[1] * s).toFixed(1);
+        el('line', { 'class': 'b-line ' + l[0], x1: 0, x2: W, y1: y, y2: y }, bg);
+      });
+      // 倾斜的字体：加一组淡淡的斜线，帮孩子把每个字写成一样的斜度
+      if (slant) {
+        var gap = 40, lo = Math.floor(-this.ox / s / gap) - 2, hi = Math.ceil((W - this.ox) / s / gap) + 2;
+        for (var k = lo; k <= hi; k++) {
+          el('line', {
+            'class': 'b-slant',
+            x1: (this.ox + (k * gap + t * Gl.PIVOT) * s).toFixed(1), y1: top.toFixed(1),
+            x2: (this.ox + (k * gap + t * (Gl.PIVOT - 150)) * s).toFixed(1), y2: (top + 150 * s).toFixed(1)
+          }, bg);
+        }
       }
     }
     var g = el('g', { transform: this.tf() }, bg);
-    var mode = this.task.mode, strokes = this.glyph.strokes;
-    this.fills = [];
-    if (mode === 'trace' || this.ghost) {
-      strokes.forEach(function (st) {
-        if (st.dot) el('circle', { 'class': self.ghost ? 'g-ghost-dot' : 'g-road-dot', cx: st.pts[0].x, cy: st.pts[0].y, r: 7.5 }, g);
-        else el('path', { 'class': self.ghost ? 'g-ghost' : 'g-road', d: st.d }, g);
-      });
-    }
-    if (mode === 'trace') {
-      strokes.forEach(function (st) {
-        var f;
-        if (st.dot) f = el('circle', { 'class': 'g-fill-dot', cx: st.pts[0].x, cy: st.pts[0].y, r: 7.5 }, g);
-        else f = el('path', { 'class': 'g-fill', d: st.d, pathLength: 100, 'stroke-dasharray': 100, 'stroke-dashoffset': 100 }, g);
-        self.fills.push(f);
-      });
-      strokes.forEach(function (st) { if (!st.dot) el('path', { 'class': 'g-dash', d: st.d }, g); });
-    } else if (mode === 'dots') {
-      strokes.forEach(function (st) {
-        if (st.dot) el('circle', { 'class': 'g-dots-dot', cx: st.pts[0].x, cy: st.pts[0].y, r: 6 }, g);
-        else el('path', { 'class': 'g-dots', d: st.d }, g);
+    var mode = this.task.mode;
+    comp.letters.forEach(function (L, li) {
+      var lg = el('g', { transform: 'translate(' + L.x.toFixed(2) + ' ' + L.y + ')' }, g);
+      var ghost = self.ghost || (self.ghostSet && self.ghostSet[li]);
+      var strokes = L.g.strokes;
+      if (mode === 'trace' || ghost) {
+        strokes.forEach(function (st) {
+          if (st.dot) el('circle', { 'class': ghost ? 'g-ghost-dot' : 'g-road-dot', cx: st.pts[0].x, cy: st.pts[0].y, r: 7.5 }, lg);
+          else el('path', { 'class': ghost ? 'g-ghost' : 'g-road', d: st.d }, lg);
+        });
+      }
+      if (mode === 'trace') {
+        strokes.forEach(function (st, n) {
+          var f;
+          if (st.dot) f = el('circle', { 'class': 'g-fill-dot', cx: st.pts[0].x, cy: st.pts[0].y, r: 7.5 }, lg);
+          else f = el('path', { 'class': 'g-fill', d: st.d, pathLength: 100, 'stroke-dasharray': 100, 'stroke-dashoffset': 100 }, lg);
+          f.style.opacity = 0;
+          self.fills[L.first + n] = f;
+        });
+        strokes.forEach(function (st) { if (!st.dot) el('path', { 'class': 'g-dash', d: st.d }, lg); });
+      } else if (mode === 'dots') {
+        strokes.forEach(function (st) {
+          if (st.dot) el('circle', { 'class': 'g-dots-dot', cx: st.pts[0].x, cy: st.pts[0].y, r: 6 }, lg);
+          else el('path', { 'class': 'g-dots', d: st.d }, lg);
+        });
+      }
+    });
+    // “自己写”一个单词或一句话：每个字母下面一条短横线，告诉孩子这个字母写在哪儿；检查后变绿或变红
+    if (mode === 'write' && !comp.single) {
+      comp.letters.forEach(function (L, li) {
+        var m = self.marks && self.marks[li];
+        self.slots[li] = el('line', { 'class': 'b-slot' + (m ? ' ' + m : ''), x1: L.x0 + 3, x2: L.x1 - 3, y1: L.y + 112, y2: L.y + 112 }, g);
       });
     }
     this.updateFill();
   };
 
+  // 只更新“刚写完的那一笔”和“正在写的这一笔”，长句子里不用每次把几十笔都刷一遍
   Board.prototype.updateFill = function () {
     if (!this.sess || !this.fills || !this.fills.length) return;
-    var s = this.sess, strokes = this.glyph.strokes;
-    for (var i = 0; i < this.fills.length; i++) {
+    var s = this.sess, strokes = this.comp.strokes;
+    var to = Math.min(strokes.length - 1, s.si);
+    for (var i = this._fi || 0; i <= to; i++) {
       var f = this.fills[i], st = strokes[i];
+      if (!f) continue;
       if (st.dot) { f.style.opacity = i < s.si ? 1 : 0; continue; }
-      var frac = i < s.si ? 1 : i === s.si ? s.prog / (st.pts.length - 1) : 0;
+      var frac = i < s.si ? 1 : s.prog / (st.pts.length - 1);
       f.setAttribute('stroke-dashoffset', (100 * (1 - frac)).toFixed(1));
       f.style.opacity = frac > 0 ? 1 : 0;      // 避免圆头在起点漏出一个小点
     }
+    this._fi = to;
   };
 
   /* ---------- 起笔点、笔顺数字、方向箭头 ---------- */
@@ -1872,13 +2167,13 @@ h1, h2, h3 { text-wrap: balance; }
     if (this.demoToken && this.demoLayer) return;          // 示范动画进行中，先不动
     while (fx.firstChild) fx.removeChild(fx.firstChild);
     if (!this.task || !this.sess || this.sess.done) return;
-    var s = this.sess, strokes = this.glyph.strokes;
-    var R = Math.max(11, Math.min(21, this.s * 6.5));
+    var s = this.sess, strokes = this.comp.strokes;
+    var R = Math.max(9, Math.min(21, this.s * 6.5));
     var X = function (p) { return self.ox + p.x * self.s; }, Y = function (p) { return self.oy + p.y * self.s; };
     var cur = strokes[s.si], p0 = cur.pts[s.prog];
-    // 后面几笔的小号码
+    // 这个字母后面几笔的小号码
     var placed = [{ x: X(cur.pts[0]), y: Y(cur.pts[0]) }];
-    for (var i = s.si + 1; i < strokes.length; i++) {
+    for (var i = s.si + 1; i < strokes.length && strokes[i].letter === cur.letter; i++) {
       var q = { x: X(strokes[i].pts[0]), y: Y(strokes[i].pts[0]) };
       for (var k = 0; k < placed.length; k++) {
         if (Math.hypot(q.x - placed[k].x, q.y - placed[k].y) < R * 1.5) { q.x += R * 1.75; q.y -= R * 0.35; k = -1; }
@@ -1886,10 +2181,10 @@ h1, h2, h3 { text-wrap: balance; }
       placed.push(q);
       var g2 = el('g', { 'class': 'fx-next' }, fx);
       el('circle', { cx: q.x, cy: q.y, r: R * 0.62 }, g2);
-      el('text', { x: q.x, y: q.y, 'font-size': R * 0.78, dy: '0.36em' }, g2).textContent = i + 1;
+      el('text', { x: q.x, y: q.y, 'font-size': R * 0.78, dy: '0.36em' }, g2).textContent = strokes[i].k + 1;
     }
     // 方向箭头
-    if (!cur.dot && cur.pts.length > 10 && this.task.mode !== 'write') {
+    if (!cur.dot && cur.pts.length > 10) {
       var a = Math.min(cur.pts.length - 3, s.prog + Math.round(15 / STEP));
       var pa = cur.pts[Math.max(0, a - 2)], pb = cur.pts[Math.min(cur.pts.length - 1, a + 2)];
       var ang = Math.atan2(pb.y - pa.y, pb.x - pa.x) * 180 / Math.PI;
@@ -1903,10 +2198,10 @@ h1, h2, h3 { text-wrap: balance; }
     var g = el('g', { 'class': 'fx-start', transform: 'translate(' + X(p0).toFixed(1) + ' ' + Y(p0).toFixed(1) + ')' }, fx);
     el('circle', { 'class': 'fx-pulse', r: R }, g);
     el('circle', { 'class': 'fx-dot', r: R * (s.prog > 0 ? 0.6 : 1) }, g);
-    if (s.prog === 0) el('text', { 'font-size': R * 1.15, dy: '0.36em' }, g).textContent = s.si + 1;
+    if (s.prog === 0) el('text', { 'font-size': R * 1.15, dy: '0.36em' }, g).textContent = cur.k + 1;
   };
 
-  /* ---------- 示范动画 ---------- */
+  /* ---------- 示范动画（单词和句子里只示范正在写的那个字母） ---------- */
   Board.prototype.stopDemo = function () {
     if (!this.demoToken) return;
     this.demoToken = 0;
@@ -1915,22 +2210,23 @@ h1, h2, h3 { text-wrap: balance; }
     this.drawFx();
   };
   Board.prototype.demo = function () {
-    if (!this.task || !this.W) return;
+    if (!this.task || !this.W || !this.comp) return;
     this.stopDemo();
     var self = this, token = (this.demoToken = Date.now() + Math.random());
-    var fx = this.fx;
+    var fx = this.fx, comp = this.comp;
+    var li = this.sess && !this.sess.done ? comp.strokes[this.sess.si].letter : 0;
+    var L = comp.letters[li], strokes = comp.strokes.slice(L.first, L.first + L.n), local = L.g.strokes;
     while (fx.firstChild) fx.removeChild(fx.firstChild);
     var layer = (this.demoLayer = el('g', { 'class': 'demo', transform: this.tf() }, fx));
-    var strokes = this.glyph.strokes, i = 0;
+    var inner = el('g', { transform: 'translate(' + L.x.toFixed(2) + ' ' + L.y + ')' }, layer), i = 0;
     var pen = el('circle', { 'class': 'demo-pen', r: 6.5, cx: strokes[0].pts[0].x, cy: strokes[0].pts[0].y }, layer);
     function next() {
       if (self.demoToken !== token) return;
       if (i >= strokes.length) { setTimeout(function () { if (self.demoToken === token) self.stopDemo(); }, 650); return; }
       var st = strokes[i], t0 = null, dur = Math.max(420, st.len / 85 * 1000);
       var path = st.dot
-        ? el('circle', { 'class': 'demo-dot', cx: st.pts[0].x, cy: st.pts[0].y, r: 0 }, layer)
-        : el('path', { 'class': 'demo-path', d: st.d, pathLength: 100, 'stroke-dasharray': 100, 'stroke-dashoffset': 100 }, layer);
-      layer.appendChild(pen);
+        ? el('circle', { 'class': 'demo-dot', cx: local[i].pts[0].x, cy: local[i].pts[0].y, r: 0 }, inner)
+        : el('path', { 'class': 'demo-path', d: st.d, pathLength: 100, 'stroke-dasharray': 100, 'stroke-dashoffset': 100 }, inner);
       function frame(t) {
         if (self.demoToken !== token) return;
         if (t0 === null) t0 = t;
@@ -1959,7 +2255,7 @@ h1, h2, h3 { text-wrap: balance; }
     }
     return pen.id === 'ink' || !pen.colors ? this.inkColor : pen.colors[0];
   };
-  Board.prototype.base = function () { return Math.max(3, this.s * 5.4); };
+  Board.prototype.base = function () { return Math.max(2.4, this.s * 5.4); };
 
   // 画出以第 i 个点结尾的那一小段（用中点做二次曲线，线条更圆滑）
   Board.prototype.drawSeg = function (ink, i, last) {
@@ -2126,20 +2422,88 @@ h1, h2, h3 { text-wrap: balance; }
 
   /* ---------- 自己写：检查 ---------- */
   Board.prototype.hasInk = function () { return this.inks.length > 0; };
+
+  // 不带点的字符：极短的笔迹（笔尖不小心碰了一下）不参与识别
+  function solid(strokes, glyph) {
+    if (glyph.strokes.some(function (st) { return st.dot; })) return strokes;
+    var keep = strokes.filter(function (pts) {
+      var L = 0;
+      for (var i = 1; i < pts.length; i++) L += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
+      return L >= 4;
+    });
+    return keep.length ? keep : strokes;
+  }
+
+  // 单个字符
   Board.prototype.check = function () {
-    var strokes = this.inks.map(function (k) { return k.pts; });
-    // 不带点的字符：极短的笔迹（笔尖不小心碰了一下）不参与识别
-    var hasDot = this.glyph.strokes.some(function (st) { return st.dot; });
-    if (!hasDot) {
-      var solid = strokes.filter(function (pts) {
-        var L = 0;
-        for (var i = 1; i < pts.length; i++) L += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
-        return L >= 4;
-      });
-      if (solid.length) strokes = solid;
-    }
-    return En.recognize(strokes, this.task.ch);
+    var L = this.comp.letters[0];
+    return En.recognize(solid(this.inks.map(function (k) { return k.pts; }), L.g), L.ch);
   };
+
+  // 单词、句子：先看每一笔落在哪个字母的位置上
+  Board.prototype.assign = function () {
+    var comp = this.comp, per = comp.letters.map(function () { return []; });
+    this.inks.forEach(function (ink) {
+      var cx = 0, cy = 0, n = ink.pts.length;
+      ink.pts.forEach(function (p) { cx += p.x; cy += p.y; });
+      cx /= n; cy /= n;
+      var row = Math.max(0, Math.min(comp.rows - 1, Math.round((cy - 75) / Gl.ROW)));
+      var best = -1, bd = 1e9;
+      comp.letters.forEach(function (L, i) {
+        if (L.row !== row) return;
+        var d = cx < L.x0 ? L.x0 - cx : cx > L.x1 ? cx - L.x1 : 0;
+        if (d < bd) { bd = d; best = i; }
+      });
+      ink.letter = best >= 0 && bd <= 22 ? best : -1;
+      if (ink.letter >= 0) per[ink.letter].push(ink);
+    });
+    return per;
+  };
+
+  /*
+   * 逐个字母检查（分几帧做完，横线会一个个变绿或变红）。
+   * done 收到 {pass, stars, acc, ok, total, bad:[字母序号]}：
+   * 短的单词要求全对；长句子每 12 个字符允许 1 个没认出来，免得识别偶尔看走眼就卡住孩子。
+   */
+  Board.prototype.checkText = function (done) {
+    var self = this, comp = this.comp, per = this.assign(), i = 0, n = comp.letters.length;
+    var okN = 0, starSum = 0, accSum = 0, bad = [], task = this.task;
+    this.marks = [];
+    function step() {
+      if (self.task !== task || self.comp !== comp) return;        // 中途换题了
+      var t0 = Date.now();
+      while (i < n && Date.now() - t0 < 14) {
+        var L = comp.letters[i], inks = per[i], r;
+        if (!inks.length) r = { ok: false };
+        else if (Gl.kindOf(L.ch) === 'punct') r = { ok: true, stars: 3, acc: 1 };      // 标点只看写没写
+        else {
+          r = En.recognize(solid(inks.map(function (k) {
+            return k.pts.map(function (p) { return { x: p.x - L.x, y: p.y - L.y }; });
+          }), L.g), L.ch);
+        }
+        if (r.ok) { okN++; starSum += r.stars; accSum += r.acc; } else bad.push(i);
+        self.marks[i] = r.ok ? 'ok' : 'bad';
+        if (self.slots[i]) self.slots[i].setAttribute('class', 'b-slot ' + self.marks[i]);
+        i++;
+      }
+      if (i < n) { root.requestAnimationFrame(step); return; }
+      var miss = n - okN, q = okN ? starSum / okN : 0, pass = miss <= Math.floor(n / 12);
+      var stars = !pass ? 0 : (miss === 0 && q >= 2.4) ? 3 : q >= 1.7 ? 2 : 1;
+      if (miss > 0) stars = Math.min(stars, 2);
+      done({ pass: pass, stars: stars, acc: okN ? (accSum / okN) * (okN / n) : 0, ok: okN, total: n, bad: bad });
+    }
+    step();
+  };
+
+  // 擦掉指定字母位置上的笔迹，让孩子只重写这几个；hint 为真时在这些位置显示淡淡的字形
+  Board.prototype.eraseLetters = function (list, hint) {
+    var drop = {};
+    list.forEach(function (i) { drop[i] = true; });
+    this.inks = this.inks.filter(function (k) { return !(k.letter >= 0 && drop[k.letter]); });
+    if (hint) this.ghostSet = drop;
+    this.drawBg(); this.redraw();
+  };
+
   Board.prototype.showGhost = function () {
     this.ghost = true;
     this.drawBg();
@@ -2187,20 +2551,32 @@ h1, h2, h3 { text-wrap: balance; }
     return '<svg class="gl ' + (lower ? 'gl-lower ' : '') + (cls || '') + '" viewBox="' + (lower ? '-12 -10 124 172' : '-10 -14 124 128') + '" role="img" aria-label="' + ch + '">' +
       (rule ? RULE + (lower ? '<line x1="-3000" x2="3000" y1="150" y2="150"/>' : '') + '</g>' : '') + strokesSvg(Gl.get(ch)) + '</svg>';
   }
-  // 一串字符按各自的宽度排开（岛屿封面、字体示例）。o: {style 指定字体, rule 四线格, w 固定画布宽度并居中}
-  function wordSvg(str, o) {
+  // 一个单词或一句话，用当前字体排出来，太长会折成几行（岛屿封面、字体示例、练字页的示范）。
+  // o: {style 指定字体, rule 四线格, w 固定画布宽度并居中, maxW 每行最宽多少, scale 固定大小（每个字格单位多少像素）}
+  function textSvg(str, o) {
     o = o || {};
-    var x = 0, body = '', gap = 16;
-    for (var i = 0; i < str.length; i++) {
-      if (str[i] === ' ') { x += 30; continue; }
-      var g = Gl.get(str[i], o.style);
-      body += '<g transform="translate(' + (x - g.box.minX).toFixed(1) + ' 0)">' + strokesSvg(g) + '</g>';
-      x += g.box.maxX - g.box.minX + gap;
+    var comp = Gl.compose(str, o.style, o.maxW), body = '', rule = '';
+    comp.letters.forEach(function (L) {
+      body += '<g transform="translate(' + L.x.toFixed(1) + ' ' + L.y + ')">' + strokesSvg(L.g) + '</g>';
+    });
+    if (o.rule) {
+      rule = '<g class="gl-rule">';
+      for (var r = 0; r < comp.rows; r++) {
+        var y = r * Gl.ROW;
+        rule += '<line x1="-3000" x2="3000" y1="' + y + '" y2="' + y + '"/><line class="mid" x1="-3000" x2="3000" y1="' + (y + 50) + '" y2="' + (y + 50) + '"/>' +
+          '<line class="base" x1="-3000" x2="3000" y1="' + (y + 100) + '" y2="' + (y + 100) + '"/>';
+      }
+      rule += '</g>';
     }
-    var w = x - gap, vbW = o.w || w + 28;
-    return '<svg class="gl gl-word" viewBox="' + ((w - vbW) / 2).toFixed(1) + ' -14 ' + vbW.toFixed(1) + ' 128" role="img" aria-label="' + str + '">' +
-      (o.rule ? RULE + '</g>' : '') + body + '</svg>';
+    // 只有一行、又没有往下伸的字母（g j p q y）时，画布只留到基线下面一点
+    var deep = comp.rows > 1 || comp.letters.some(function (L) { return L.g.box.maxY > 108; });
+    var vbW = o.w || comp.width + 28;
+    return '<svg class="gl gl-word" viewBox="' + ((comp.width - vbW) / 2).toFixed(1) + ' -14 ' + vbW.toFixed(1) + ' ' + (deep ? comp.height + 28 : 128) + '"' +
+      (o.scale ? ' style="width:' + Math.round(vbW * o.scale) + 'px;height:auto;max-width:100%"' : '') +
+      ' role="img" aria-label="' + esc(str) + '">' + rule + body + '</svg>';
   }
+  function esc(str) { return String(str).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;'); }
+  function zhOf(text) { return WI.Words.zh[text] || ''; }
   function kindLabel(ch) {
     var k = Gl.kindOf(ch);
     return k === 'num' ? '数字' : k === 'upper' ? '大写' : '小写';
@@ -2316,8 +2692,8 @@ h1, h2, h3 { text-wrap: balance; }
     var frac = Math.min(1, day.n / goal), left = Math.max(0, goal - day.n), C = 2 * Math.PI * 26;
     var islands = Store.WORLDS.map(function (w) {
       var p = Store.worldProgress(w.id), nx = Store.nextLevel(w.id);
-      return '<button class="island w-' + w.id + '" data-act="world" data-id="' + w.id + '">' +
-        '<span class="island-art">' + wordSvg(w.sample, { rule: true, w: 290 }) + '</span>' +
+      return '<button class="island w-' + w.id + (w.text ? ' island-wide' : '') + '" data-act="world" data-id="' + w.id + '">' +
+        '<span class="island-art">' + textSvg(w.sample, w.text ? { rule: true } : { rule: true, w: 290 }) + '</span>' +
         '<span class="island-info"><span class="island-name">' + w.name + '</span>' +
         '<span class="island-meta">' + (nx ? '第 ' + nx.n + ' 关 · 共 ' + p.total + ' 关' : '全部通关') + '</span>' +
         '<span class="bar"><i style="width:' + Math.round(100 * p.done / p.total) + '%"></i></span>' +
@@ -2336,14 +2712,14 @@ h1, h2, h3 { text-wrap: balance; }
         '</div></header>' +
       '<div class="scroll home-main">' +
         '<div class="hero"><h1>写字岛</h1><p>拿起笔，去岛上闯关吧</p>' +
-          '<button class="font-btn" data-act="fonts" aria-label="选择字体，现在是' + Gl.style().name + '">' + wordSvg('Aa') +
+          '<button class="font-btn" data-act="fonts" aria-label="选择字体，现在是' + Gl.style().name + '">' + textSvg('Aa') +
           '<span class="font-btn-text"><small>字体</small><b>' + Gl.style().name + '</b></span>' + icon('next') + '</button></div>' +
         '<div class="islands">' + islands + '</div>' +
         '<div class="home-row">' +
           '<div class="goal"><svg class="ring" viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="26" class="ring-bg"/>' +
             '<circle cx="32" cy="32" r="26" class="ring-fg" stroke-dasharray="' + C.toFixed(1) + '" stroke-dashoffset="' + (C * (1 - frac)).toFixed(1) + '" transform="rotate(-90 32 32)"/></svg>' +
             '<span class="goal-num"><b>' + day.n + '</b>/' + goal + '</span>' +
-            '<span class="goal-text"><b>今日目标</b><span>' + (left ? '再写 ' + left + ' 个字，拿 10 颗宝石' : '今天的目标完成啦') + '</span></span></div>' +
+            '<span class="goal-text"><b>今日目标</b><span>' + (left ? '再练 ' + left + ' 次，拿 10 颗宝石' : '今天的目标完成啦') + '</span></span></div>' +
           '<button class="nav n-pick" data-act="pick">' + icon('pencil') + '<span>自由练习</span></button>' +
           '<button class="nav n-prog" data-act="progress">' + icon('chart') + '<span>成长记录</span></button>' +
           '<button class="nav n-shop" data-act="shop">' + icon('bag') + '<span>宝石商店</span></button>' +
@@ -2360,12 +2736,14 @@ h1, h2, h3 { text-wrap: balance; }
       var face = !open ? icon('lock') : l.boss ? icon('crown') : '<b>' + l.n + '</b>';
       return '<button class="' + cls + '" data-act="level" data-id="' + l.id + '" aria-label="第 ' + l.n + ' 关' + (open ? '' : '，还没解锁') + '">' +
         '<span class="node-ball">' + face + '</span>' + starRow(stars, 'stars-s') +
-        '<span class="node-label">' + (l.boss ? '大挑战' : l.chars.join(' ')) + '</span></button>';
+        '<span class="node-label' + (l.title ? ' node-title' : '') + '">' + (l.title || (l.boss ? '大挑战' : l.chars.join(' '))) + '</span></button>';
     }).join('');
     app.innerHTML = '<section class="screen map w-' + id + '">' +
       header(w.name, 'home', '<span class="chip chip-star">' + icon('star', 'on') + '<b>' + p.stars + '</b><small>/' + p.maxStars + '</small></span>') +
       '<div class="scroll map-scroll"><div class="track" id="track"><svg class="track-path" aria-hidden="true"><path id="trackPath"/></svg>' + nodes + '</div>' +
-      '<p class="map-tip">每一关都是三步：先描红，再写虚线，最后自己写。全部三颗星有额外的宝石。</p></div></section>';
+      '<p class="map-tip">' + (id === 'word' ? '每个单词先描红，再自己写：每条小横线上写一个字母。'
+        : id === 'sent' ? '句子从两个词开始，越来越长；最后两关是把几句话连起来，自己写出一小段。'
+        : '每一关都是三步：先描红，再写虚线，最后自己写。全部三颗星有额外的宝石。') + '</p></div></section>';
     layoutMap();
     var nextEl = app.querySelector('.node.next');
     if (nextEl && nextEl.scrollIntoView) nextEl.scrollIntoView({ block: 'center' });
@@ -2390,6 +2768,13 @@ h1, h2, h3 { text-wrap: balance; }
   }
 
   function levelTasks(l) {
+    if (l.texts) {
+      if (l.para) return l.texts.map(function (t) { return { text: t, mode: 'write' }; });
+      if (l.boss) return shuffle(l.texts).slice(0, l.bossN).map(function (t) { return { text: t, mode: 'write' }; });
+      var list = [];
+      l.texts.forEach(function (t) { list.push({ text: t, mode: 'trace' }, { text: t, mode: 'write' }); });
+      return list;
+    }
     if (l.boss) return shuffle(l.chars).slice(0, l.bossN).map(function (ch) { return { ch: ch, mode: 'write' }; });
     var out = [];
     l.chars.forEach(function (ch) { Store.MODES.forEach(function (m) { out.push({ ch: ch, mode: m }); }); });
@@ -2411,6 +2796,11 @@ h1, h2, h3 { text-wrap: balance; }
     trace: ['从 1 号圆点出发，跟着箭头走', '沿着灰色的路，慢慢写'],
     dots: ['这次只有虚线，沿着它写', '顺着虚线走，笔顺和刚才一样'],
     write: ['看着左边的样子，自己写出来', '格子是空的，轮到你啦']
+  };
+  var INTRO_TEXT = {
+    trace: ['一个字母一个字母地描，写完一个接着下一个', '跟着圆点走，把每个字母描出来'],
+    dots: ['沿着虚线，把每个字母写出来'],
+    write: ['每条小横线上写一个字母', '看着示范，一个字母一个字母地写']
   };
   var HINT = {
     start: '要从闪亮的圆点开始写哦',
@@ -2445,7 +2835,7 @@ h1, h2, h3 { text-wrap: balance; }
             '<button class="ibtn ibtn-speak" data-act="speak" aria-label="再读一遍">' + icon('sound') + '</button></div>' +
           '<div class="buddy"><span class="buddy-face">' + buddy.face + '</span><div class="bubble" id="bubble"></div></div>' +
           '<div class="tools">' +
-            '<button class="btn btn-soft" data-act="demo">' + icon('play') + '<span>示范</span></button>' +
+            '<button class="btn btn-soft" data-act="demo" id="btnDemo">' + icon('play') + '<span>示范</span></button>' +
             '<button class="btn btn-soft" data-act="clear">' + icon('redo') + '<span>重写</span></button>' +
             '<button class="btn btn-go" data-act="check" id="btnCheck" hidden>' + icon('check') + '<span>写好了</span></button>' +
           '</div>' +
@@ -2496,7 +2886,7 @@ h1, h2, h3 { text-wrap: balance; }
     var st = S(), t = play.cur;
     board.host.dataset.skin = st.use.board;
     board.setTask({
-      ch: t.ch, mode: mode, tol: En.DIFFICULTY[st.set.diff].tol, size: st.set.size,
+      ch: t.ch, text: t.text, mode: mode, tol: En.DIFFICULTY[st.set.diff].tol, size: st.set.size,
       pen: Store.item('pen', st.use.pen), input: st.set.input
     });
   }
@@ -2512,26 +2902,40 @@ h1, h2, h3 { text-wrap: balance; }
     clearTimeout(play.auto);
     play.fails = 0; play.assist = false; play.done = false; play.t0 = Date.now();
     $('#banner').hidden = true;
+    $('#boardWrap').classList.remove('lift');
     var tag = $('#modeTag');
     tag.textContent = MODE_NAME[t.mode]; tag.dataset.mode = t.mode;
-    $('#model').innerHTML = glyphSvg(t.ch, '', true);
-    $('#promptText').textContent = kindLabel(t.ch) + ' ' + t.ch;
+    $('.play').className = 'screen play hand-' + S().set.hand + (t.text ? ' is-text' : '');
+    if (t.text) { modelText(); $('#promptText').textContent = zhOf(t.text); }
+    else { $('#model').innerHTML = glyphSvg(t.ch, '', true); $('#promptText').textContent = kindLabel(t.ch) + ' ' + t.ch; }
     $('#btnCheck').hidden = t.mode !== 'write';
-    $('.play').className = 'screen play hand-' + S().set.hand;
+    $('#btnDemo').hidden = !!t.text && t.mode === 'write';       // 自己写单词、句子时，示范就在旁边，不再演示笔顺
+    play.checking = false;
     boardTask(t.mode);
     renderPips(); inputChip();
-    say(pickOne(INTRO[t.mode]));
-    var first = t.mode === 'trace' && Store.rec(t.ch).n === 0;
+    say(pickOne((t.text ? INTRO_TEXT : INTRO)[t.mode]));
+    var first = !t.text && t.mode === 'trace' && Store.rec(t.ch).n === 0;
     setTimeout(function () {
       if (!play || play.cur !== t || play.done) return;
-      Voice.say(t.ch);
+      speakTask(t);
       if (first && board) board.demo();
     }, 380);
+  }
+  function speakTask(t) {
+    if (t.text) Voice.sayText(t.text); else Voice.say(t.ch);
+  }
+  // 练字页上的示范文字：按提示栏的宽度折行，字不会小到看不清
+  function modelText() {
+    var box = $('#model');
+    if (!box || !play || !play.cur || !play.cur.text) return;
+    var px = box.clientWidth || 220;
+    box.innerHTML = textSvg(play.cur.text, { rule: true, maxW: Math.max(520, Math.min(2400, px / 0.27)) });
   }
 
   function checkWrite() {
     if (!play || play.done || !board) return;
     if (!board.hasInk()) { say('先在格子里写出来', true); return; }
+    if (play.cur.text) { checkText(); return; }
     var t = play.cur, r = board.check();
     if (r.ok) {
       board.showGhost();
@@ -2551,6 +2955,36 @@ h1, h2, h3 { text-wrap: balance; }
     setTimeout(function () { if (play && play.cur === t && !play.done && board) board.clear(); }, 1000);
   }
 
+  // 单词、句子：逐个字母检查。没过关时，只把红色横线上的字母擦掉重写
+  function checkText() {
+    var t = play.cur;
+    if (play.checking) return;
+    play.checking = true;
+    board.checkText(function (r) {
+      if (!play || play.cur !== t || play.done) return;
+      play.checking = false;
+      var miss = r.total - r.ok;
+      if (r.pass) {
+        finishTask(r.stars, r.acc, miss ? '有 ' + miss + ' 个字母没认出来，下次写清楚一点' : '');
+        return;
+      }
+      play.fails++;
+      Sfx.oops(); shake();
+      if (play.fails >= 3) {
+        if (r.ok / r.total >= 0.7) { finishTask(1, r.acc * 0.8, '还有 ' + miss + ' 个字母要多练'); return; }
+        play.assist = true;
+        say('没关系，照着描一遍', true);
+        $('#btnCheck').hidden = true;
+        boardTask('trace');
+        return;
+      }
+      say(miss === r.total ? '在每条小横线上写一个字母' : '红色横线上的 ' + miss + ' 个字母再写一遍', true);
+      setTimeout(function () {
+        if (play && play.cur === t && !play.done && board) board.eraseLetters(r.bad, play.fails >= 2);
+      }, 1100);
+    });
+  }
+
   function bumpGems() {
     var chip = $('#gemChip');
     if (!chip) return;
@@ -2563,7 +2997,7 @@ h1, h2, h3 { text-wrap: balance; }
     play.done = true;
     board.lock();
     var t = play.cur, secs = (Date.now() - play.t0) / 1000;
-    var rw = Store.recordTask({ ch: t.ch, mode: t.mode, stars: stars, acc: acc, secs: secs });
+    var rw = Store.recordTask({ ch: t.ch, text: t.text, mode: t.mode, stars: stars, acc: acc, secs: secs });
     play.best[play.i] = Math.max(play.best[play.i] || 0, stars);
     play.gems += rw.gems + (rw.goal ? 10 : 0); play.score += rw.score;
     play.accSum += acc; play.accN++;
@@ -2579,6 +3013,11 @@ h1, h2, h3 { text-wrap: balance; }
       '<div class="banner-act"><button class="btn btn-soft" data-act="again">' + icon('redo') + '<span>再写一次</span></button>' +
       '<button class="btn btn-go' + (auto ? ' auto' : '') + '" data-act="next"><span>' + (last ? (play.kind === 'level' ? '看成绩' : '完成') : '下一个') + '</span>' + icon('next') + '</button></div>';
     b.hidden = false;
+    var wrap = $('#boardWrap');
+    if (t.text && wrap) {                       // 文字可能写满了整块板子：让写字板缩上去一点，成绩条不挡最后一行
+      wrap.style.setProperty('--banner-h', (b.offsetHeight + 16) + 'px');
+      wrap.classList.add('lift');
+    }
     for (var i = 0; i < stars; i++) (function (k) { setTimeout(function () { Sfx.star(k); }, 180 + k * 200); })(i);
     setTimeout(function () { Sfx.gem(); bumpGems(); }, 300 + stars * 200);
     if (stars === 3) confetti(46);
@@ -2612,7 +3051,8 @@ h1, h2, h3 { text-wrap: balance; }
     var buddy = Store.item('buddy', S().use.buddy);
     openModal(
       '<div class="result"><div class="result-face">' + buddy.face + '</div>' +
-      '<h2>' + (p.level.boss ? '大挑战成功！' : '第 ' + p.level.n + ' 关通过！') + '</h2>' +
+      '<h2>' + (p.level.para ? '你写出了一段话！' : p.level.boss ? '大挑战成功！' : '第 ' + p.level.n + ' 关通过！') + '</h2>' +
+      (p.level.para ? '<div class="result-para">' + textSvg(p.level.texts.join(' '), { maxW: 1500 }) + '<p>' + p.level.texts.map(zhOf).join('') + '</p></div>' : '') +
       '<div class="result-stars">' + [0, 1, 2].map(function (i) { return icon('star', (i < stars ? 'on' : 'off') + ' pop' + i); }).join('') + '</div>' +
       '<div class="result-stats"><div><b>' + Math.round(100 * p.accSum / Math.max(1, p.accN)) + '%</b><span>平均准确度</span></div>' +
       '<div><b>+' + (p.gems + r.gems) + '</b><span>宝石' + (perfect ? '（含全三星奖励）' : '') + '</span></div>' +
@@ -2645,9 +3085,23 @@ h1, h2, h3 { text-wrap: balance; }
       }).join('') + '</div><div class="seg seg-mode" role="group" aria-label="练习方式">' + Store.MODES.map(function (m) {
         return '<button aria-pressed="' + (m === pick.mode) + '" class="' + (m === pick.mode ? 'on' : '') + '" data-act="pick-mode" data-id="' + m + '">' + MODE_NAME[m] + '</button>';
       }).join('') + '</div></div>' +
-      '<div class="scroll"><div class="tiles">' + w.chars.map(function (ch) {
+      '<div class="scroll">' + (w.text ? textList(w, 'pick-text') : '<div class="tiles">' + w.chars.map(function (ch) {
         return '<button class="tile st' + Store.stage(ch) + '" data-act="pick-char" data-ch="' + ch + '" aria-label="练习 ' + kindLabel(ch) + ' ' + ch + '">' + glyphSvg(ch) + starRow(Store.bestStars(ch), 'stars-s') + '</button>';
-      }).join('') + '</div><p class="hint-line">点一个字开始练，写完会自动接着练下一个。</p></div></section>';
+      }).join('') + '</div>') + '<p class="hint-line">点一个开始练，写完会自动接着练下一个。</p></div></section>';
+  }
+  // 单词是一格一格的小卡片，句子是一行一行的；颜色深浅表示练到了哪一步
+  function textList(w, act) {
+    var word = w.id === 'word';
+    return '<div class="' + (word ? 'tiles tiles-word' : 'sents') + '">' + w.texts.map(function (t) {
+      return '<button class="' + (word ? 'tile tile-word' : 'sent') + ' st' + Store.textStage(t) + '" data-act="' + act + '" data-text="' + esc(t) + '" aria-label="练习 ' + esc(t) + '">' +
+        textSvg(t, { scale: word ? 0.34 : 0.2, maxW: 1700 }) + '<span class="zh">' + zhOf(t) + '</span>' + starRow(Store.textStars(t), 'stars-s') + '</button>';
+    }).join('') + '</div>';
+  }
+  function startFreeText(text, mode) {
+    var w = Store.WORLDS.filter(function (x) { return x.text && x.texts.indexOf(text) >= 0; })[0];
+    if (!w) return;
+    var i = w.texts.indexOf(text), order = w.texts.slice(i).concat(w.texts.slice(0, i));
+    startSession({ kind: 'free', tasks: order.map(function (t) { return { text: t, mode: mode }; }), back: { name: screen.name === 'progress' ? 'progress' : 'pick' } });
   }
   function startFree(ch, mode) {
     var w = Store.world(Gl.kindOf(ch) === 'num' ? 'num' : Gl.kindOf(ch)), i = w.chars.indexOf(ch);
@@ -2664,11 +3118,11 @@ h1, h2, h3 { text-wrap: balance; }
     var peak = 0; days.forEach(function (d) { if (d.n > peak) peak = d.n; });
     var bars = days.map(function (d, i) {
       var label = d.today || (d.n === peak && d.n > 0);
-      return '<button class="bar-col' + (d.today ? ' today' : '') + '" data-act="day" data-i="' + i + '" aria-label="' + (d.date.getMonth() + 1) + ' 月 ' + d.date.getDate() + ' 日，写了 ' + d.n + ' 个字">' +
+      return '<button class="bar-col' + (d.today ? ' today' : '') + '" data-act="day" data-i="' + i + '" aria-label="' + (d.date.getMonth() + 1) + ' 月 ' + d.date.getDate() + ' 日，练了 ' + d.n + ' 次">' +
         '<span class="bar-box"><i style="height:' + (100 * d.n / max).toFixed(1) + '%">' + (label && d.n ? '<em>' + d.n + '</em>' : '') + '</i></span>' +
         '<span class="bar-x">' + (d.today ? '今天' : '周' + WEEK[d.date.getDay()]) + '</span></button>';
     }).join('');
-    var grid = Store.WORLDS.map(function (w) {
+    var grid = Store.WORLDS.filter(function (w) { return !w.text; }).map(function (w) {
       return '<div class="pg-group"><h4>' + w.name.replace('岛', '') + '</h4><div class="cells">' + w.chars.map(function (ch) {
         var st = Store.stage(ch);
         return '<button class="cell st' + st + '" data-act="char" data-ch="' + ch + '" aria-label="' + kindLabel(ch) + ' ' + ch + '，' + STAGE[st] + '">' + glyphSvg(ch) + '</button>';
@@ -2687,12 +3141,19 @@ h1, h2, h3 { text-wrap: balance; }
         '<div class="stat"><b>' + streak + '<small> 天</small></b><span>连续练字</span></div>' +
         '<div class="stat"><b>' + timeHtml(t.sec) + '</b><span>累计练习时间</span></div>' +
       '</div>' +
-      '<div class="card chart-card"><h3>最近 7 天写了多少个字</h3>' +
+      '<div class="card chart-card"><h3>最近 7 天练了多少次</h3>' +
         '<div class="chart" style="--g:' + (goal / max).toFixed(3) + '"><div class="goal-line"><span>目标 ' + goal + '</span></div><div class="bars">' + bars + '</div></div>' +
         '<p class="chart-note" id="dayNote">' + dayNote(days[6]) + '</p></div>' +
       '<div class="card"><h3>每个字练到哪一步了</h3>' +
         '<div class="legend">' + [0, 1, 2, 3].map(function (i) { return '<span><i class="cell st' + i + '"></i>' + STAGE[i] + '</span>'; }).join('') + '</div>' + grid +
         '<p class="hint-line">点一个字，看它的详细记录。</p></div>' +
+      '<div class="card"><h3>单词和句子</h3>' +
+        '<div class="legend">' + [0, 1, 2, 3].map(function (i) { return '<span><i class="cell st' + i + '"></i>' + STAGE[i] + '</span>'; }).join('') + '</div>' +
+        Store.WORLDS.filter(function (w) { return w.text; }).map(function (w) {
+          var tt = Store.textTotals(w.id);
+          return '<div class="pg-group"><h4>' + w.short + '：能自己写 ' + tt.done + ' / ' + tt.all + '</h4>' + textList(w, 'practice-text') + '</div>';
+        }).join('') +
+        '<p class="hint-line">点一个单词或句子就去练它。</p></div>' +
       '<div class="card"><h3>需要多练的字</h3>' + (weak.length
         ? '<div class="weak">' + weak.map(function (x) { return '<button class="weak-item" data-act="char" data-ch="' + x.ch + '">' + glyphSvg(x.ch) + '<span>' + x.acc + '%</span></button>'; }).join('') + '</div>' +
           '<button class="btn btn-go" data-act="weak">' + icon('pencil') + '<span>专项练习这 ' + weak.length + ' 个字</span></button>'
@@ -2703,7 +3164,7 @@ h1, h2, h3 { text-wrap: balance; }
   }
   var STAGE = ['还没练', '会描红', '会写虚线', '能自己写'];
   function dayNote(d) {
-    return (d.date.getMonth() + 1) + ' 月 ' + d.date.getDate() + ' 日（周' + WEEK[d.date.getDay()] + '）：写了 ' + d.n + ' 个字，练了 ' + fmtTime(d.sec) + '，拿到 ' + d.g + ' 颗宝石';
+    return (d.date.getMonth() + 1) + ' 月 ' + d.date.getDate() + ' 日（周' + WEEK[d.date.getDay()] + '）：练了 ' + d.n + ' 次，共 ' + fmtTime(d.sec) + '，拿到 ' + d.g + ' 颗宝石';
   }
   function syncText() {
     return Store.syncStatus === 'cloud' ? icon('cloud') + '进度已同步到云端，换设备登录也能接着练' : '进度保存在这台设备的浏览器里';
@@ -2784,7 +3245,7 @@ h1, h2, h3 { text-wrap: balance; }
       '<div class="font-list">' + Gl.STYLES.map(function (st) {
         var on = st.id === cur;
         return '<button class="font-card' + (on ? ' on' : '') + '" data-act="font" data-id="' + st.id + '" aria-pressed="' + on + '">' +
-          '<span class="font-sample">' + wordSvg('Panda 123', { style: st.id, rule: true }) + '</span>' +
+          '<span class="font-sample">' + textSvg('Panda 123', { style: st.id, rule: true }) + '</span>' +
           '<span class="font-meta"><b>' + st.name + '</b><span>' + st.desc + '</span></span>' +
           '<span class="font-pick">' + (on ? icon('check') + '使用中' : '用这个') + '</span></button>';
       }).join('') + '</div></div>', 'modal-fonts');
@@ -2799,7 +3260,7 @@ h1, h2, h3 { text-wrap: balance; }
     { k: 'size', name: '字的大小', opts: [['l', '大'], ['m', '中'], ['s', '小']], note: '刚开始用大字，熟练后换小字' },
     { k: 'hand', name: '写字的手', opts: [['right', '右手'], ['left', '左手']], note: '左手会把提示栏换到右边' },
     { k: 'input', name: '用什么写', opts: [['auto', '自动'], ['pen', '只认笔'], ['any', '手指也行']], note: '自动：用过 Apple Pencil 后只认笔尖，防手掌误触' },
-    { k: 'goal', name: '每日目标', opts: [[6, '6 个字'], [12, '12 个字'], [20, '20 个字']] }
+    { k: 'goal', name: '每日目标', opts: [[6, '6 次'], [12, '12 次'], [20, '20 次']], note: '写一个字、一个单词或一句话都算一次' }
   ];
   function renderSettings(askReset) {
     var st = S();
@@ -2835,7 +3296,7 @@ h1, h2, h3 { text-wrap: balance; }
     },
     'quit': quit,
     'leave': function () { var b = play ? play.back : { name: 'home' }; go(b.name, b.arg); },
-    'speak': function () { if (play) Voice.say(play.cur.ch); },
+    'speak': function () { if (play) speakTask(play.cur); },
     'demo': function () { if (board && play && !play.done) board.demo(); },
     'clear': function () { if (board && play && !play.done) { board.clear(); say('擦干净了，再写一次'); } },
     'check': checkWrite,
@@ -2850,6 +3311,8 @@ h1, h2, h3 { text-wrap: balance; }
     'pick-tab': function (t) { pick.tab = t.dataset.id; renderPick(); },
     'pick-mode': function (t) { pick.mode = t.dataset.id; renderPick(); },
     'pick-char': function (t) { startFree(t.dataset.ch, pick.mode); },
+    'pick-text': function (t) { startFreeText(t.dataset.text, pick.mode); },
+    'practice-text': function (t) { startFreeText(t.dataset.text, Store.textStage(t.dataset.text) ? 'write' : 'trace'); },
     'practice': function (t) { startFree(t.dataset.ch, t.dataset.id); },
     'char': function (t) { charInfo(t.dataset.ch); },
     'day': function (t) {
@@ -2894,7 +3357,10 @@ h1, h2, h3 { text-wrap: balance; }
   doc.addEventListener('pointerdown', function () { Sfx.unlock(); }, { passive: true });
   doc.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !modalRoot.hidden && modalRoot.querySelector('[data-act="modal-close"]')) acts['modal-close'](); });
   doc.addEventListener('gesturestart', function (e) { e.preventDefault(); });      // Safari 双指缩放
-  root.addEventListener('resize', function () { if (screen.name === 'map') layoutMap(); });
+  root.addEventListener('resize', function () {
+    if (screen.name === 'map') layoutMap();
+    if (screen.name === 'play') modelText();
+  });
 
   Store.on(function (why) {
     if (why === 'replaced') Gl.setStyle(S().set.font);
