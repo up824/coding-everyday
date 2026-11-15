@@ -228,6 +228,26 @@ for (const st of Gl.STYLES) {
   }
 }
 Gl.setStyle('print');
+// 孩子写的 o：没完全合上、多绕一小段、画扁了、起笔位置和方向都不固定，都要算对
+function sloppyO() {
+  const cx = 50 + rr(-6, 6), cy = 75 + rr(-5, 5), rx = rr(15, 28), ry = rr(17, 28);
+  const a0 = rr(0, 6.283), dir = rnd() < 0.5 ? 1 : -1, sweep = 6.283 * rr(0.88, 1.2), drift = rr(-0.18, 0.18);
+  const pts = [];
+  for (let i = 0; i <= 60; i++) {
+    const t = i / 60, a = a0 + dir * sweep * t, k = 1 + drift * t + rr(-0.04, 0.04);
+    pts.push({ x: cx + rx * k * Math.cos(a), y: cy + ry * k * Math.sin(a) });
+  }
+  return [pts];
+}
+{
+  let ok = 0;
+  for (let i = 0; i < 300; i++) if (En.recognize(sloppyO(), 'o').ok) ok++;
+  console.log(`孩子写的 o：${ok}/300 算对`);
+  check(ok >= 291, 'sloppy o pass rate ' + ok + '/300');
+  // 但不是什么都当成 o：a c e 6 9 8 不是圈，写成 a 也不能算 o
+  for (const ch of ['a', 'c', 'e', '6', '9', '8', 'u', 'b', 'd', 'p', 'q']) check(!En.isRing(tplStrokes(ch)), ch + ' counted as a ring');
+  for (const ch of ['a', 'c', 'e', 'u']) check(!En.recognize(tplStrokes(ch), 'o').ok, ch + ' accepted as o');
+}
 // 大小写占格
 {
   const small = tplStrokes('c'), r = En.recognize(small, 'C');

@@ -157,6 +157,7 @@ const url = 'file://' + path.join(__dirname, '..', 'index.html');
     const letterPts = (page, swap) => page.evaluate((swap) => {
       const b = WI.App.board, r = b.host.getBoundingClientRect();
       return b.comp.letters.map((L, i) => {
+        if (L.fixed) return [];                                   // 标点已经印好，不写
         const g = swap && swap[i] ? WI.Glyphs.get(swap[i]) : L.g;
         return g.strokes.map(st => st.pts.map(q => [r.left + b.ox + (q.x + L.x) * b.s, r.top + b.oy + (q.y + L.y) * b.s]));
       });
@@ -230,8 +231,12 @@ const url = 'file://' + path.join(__dirname, '..', 'index.html');
     await p.click('#btnCheck');
     await p.waitForSelector('#banner:not([hidden])', { timeout: 8000 });
     console.log('检查 ' + info.n + ' 个字符用时 ' + (Date.now() - t0) + ' ms');
-    const sr = await p.evaluate((t) => ({ best: WI.App.play.best[1], rec: WI.Store.trec(t), bad: WI.App.board.marks.filter(m => m === 'bad').length }), long);
+    const sr = await p.evaluate((t) => ({
+      best: WI.App.play.best[1], rec: WI.Store.trec(t), bad: WI.App.board.marks.filter(m => m === 'bad').length,
+      fixed: WI.App.board.comp.letters.filter(L => L.fixed).map(L => L.ch).join(''), strokesOfFixed: WI.App.board.comp.letters.filter(L => L.fixed).reduce((n, L) => n + L.n, 0)
+    }), long);
     check(sr.best >= 2 && sr.rec.s[2] >= 2 && sr.bad <= 3, 'writing a 12-word sentence is recognised: ' + JSON.stringify(sr));
+    check(sr.fixed === '.' && sr.strokesOfFixed === 0, 'punctuation is printed, never traced or checked: ' + JSON.stringify(sr));
     await p.waitForTimeout(700); await shot(p, '39-sentence-written');
 
     // 句子岛最后一关：一段话

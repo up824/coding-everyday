@@ -318,7 +318,39 @@
     return templates;
   }
 
-  var REC = { pass: 0.42, ratio: 1.3, slack: 0.02, good: 0.16, fine: 0.26 };
+  // 判定偏宽：宁可放过一个写得不太像的，也不要把孩子写对的字判错
+  var REC = { pass: 0.5, ratio: 1.5, slack: 0.03, good: 0.2, fine: 0.31 };
+
+  /*
+   * o、O、0：一笔画成、大致合上的圈就算对。
+   * 孩子的圈常常没完全合上、多绕一小段、或者画扁了，光和模板比容易被认成 a、c、e，所以单独放宽。
+   * 首尾离得远（c、u、e）、多绕一大截（a、6、9）、中间有交叉（8）的都不算圈。
+   */
+  function isRing(strokes) {
+    var s = strokes.filter(function (st) { return st.length > 1; });
+    if (s.length !== 1) return false;
+    var pts = s[0], n = pts.length, i, len = 0;
+    var minX = 1e9, maxX = -1e9, minY = 1e9, maxY = -1e9;
+    for (i = 0; i < n; i++) {
+      if (pts[i].x < minX) minX = pts[i].x; if (pts[i].x > maxX) maxX = pts[i].x;
+      if (pts[i].y < minY) minY = pts[i].y; if (pts[i].y > maxY) maxY = pts[i].y;
+      if (i) len += dist(pts[i], pts[i - 1]);
+    }
+    var w = maxX - minX, h = maxY - minY, size = Math.max(w, h);
+    if (size < 10 || Math.min(w, h) < size * 0.4) return false;
+    if (dist(pts[0], pts[n - 1]) > size * 0.45) return false;
+    var per = Math.PI * (w + h) / 2;
+    if (len < per * 0.7 || len > per * 1.55) return false;
+    var cx = (minX + maxX) / 2, cy = (minY + maxY) / 2, seen = {}, bins = 0, inBand = 0;
+    var rs = Gl.resample(pts, len / 48);
+    rs.forEach(function (p) {
+      var dx = (p.x - cx) / (w / 2), dy = (p.y - cy) / (h / 2), r = Math.sqrt(dx * dx + dy * dy);   // 在圈上时 r≈1
+      if (r > 0.6 && r < 1.45) inBand++;
+      var b = Math.floor((Math.atan2(dy, dx) + Math.PI) / (Math.PI / 6)) % 12;
+      if (!seen[b]) { seen[b] = 1; bins++; }
+    });
+    return inBand / rs.length >= 0.88 && bins >= 10;
+  }
 
   /*
    * 判断 strokes 是不是写的 target。
@@ -370,6 +402,7 @@
     var w = c.box.maxX - c.box.minX, h = c.box.maxY - c.box.minY;
     if (Math.max(w, h) < 10) return { ok: false, reason: 'tiny' };
     var tpl = Gl.get(target);
+    if (!pre && 'oO0'.indexOf(target) >= 0 && isRing(strokes)) { sT = Math.min(sT, REC.good * 0.9); best = 1e9; }
     var ok = sT <= REC.pass && sT <= best * REC.ratio + REC.slack;
     var res = { ok: ok, s: sT, best: best, bestCh: bestCh };
     if (!ok) {
@@ -396,7 +429,7 @@
   }
 
   root.WI.Engine = {
-    TraceSession: TraceSession, recognize: recognize, scoreAll: scoreAll, toCloud: toCloud, shapeScore: shapeScore, mates: mates,
+    TraceSession: TraceSession, recognize: recognize, scoreAll: scoreAll, isRing: isRing, toCloud: toCloud, shapeScore: shapeScore, mates: mates,
     DIFFICULTY: DIFFICULTY, REC: REC
   };
 })(typeof window !== 'undefined' ? window : globalThis);

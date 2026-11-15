@@ -1,8 +1,11 @@
 /*
  * 写字岛 — 写字板
  *
- * 三层：背景 SVG（四线格 + 字帖） / 墨迹 canvas / 提示 SVG（起笔点、箭头、示范笔）。
+ * 从下到上：背景 SVG（四线格 + 字帖） / 涂色 canvas（描红进度） / 墨迹 canvas / 预测 canvas / 提示 SVG（起笔点、箭头、示范笔）。
  * 用 Pointer Events 接 Apple Pencil：有压感，笔尖粗细会跟着变；检测到笔以后可以只认笔，防手掌误触。
+ *
+ * 跟手：笔在动的时候只往 canvas 上画，不碰 DOM、不读排版（否则每动一下浏览器都要重算一遍样式）；
+ * 墨迹一直画到最新的落点；浏览器给得出“预测点”时，再往前多画一小段，下一帧擦掉重来。
  */
 (function (root) {
   'use strict';
@@ -28,11 +31,21 @@
     this.host = host; this.cb = cb || {};
     host.innerHTML = '';
     this.bg = el('svg', { 'class': 'b-bg', 'aria-hidden': 'true' }, host);
-    this.canvas = document.createElement('canvas');
-    this.canvas.className = 'b-ink';
-    host.appendChild(this.canvas);
+    var mk = function (cls) {
+      var c = document.createElement('canvas');
+      c.className = cls;
+      host.appendChild(c);
+      return c;
+    };
+    this.fillCv = mk('b-fillcv');
+    this.canvas = mk('b-ink');
+    // 预测层：只有浏览器支持预测点（getPredictedEvents）时才需要
+    this.predCv = root.PointerEvent && root.PointerEvent.prototype.getPredictedEvents ? mk('b-pred') : null;
     this.fx = el('svg', { 'class': 'b-fx', 'aria-hidden': 'true' }, host);
     this.ctx = this.canvas.getContext('2d');
+    this.fctx = this.fillCv.getContext('2d');
+    this.pctx = this.predCv ? this.predCv.getContext('2d') : null;
+    this.rect = null; this._pr = null; this._fs = 0; this._fp = 0;
     this.inks = []; this.task = null; this.sess = null; this.active = null;
     this.locked = false; this.penSeen = false; this.demoToken = 0; this.dist = 0;
     this.W = 0; this.H = 0; this.s = 1; this.ox = 0; this.oy = 0;
@@ -120,8 +133,14 @@
     if (!r.width || !r.height) return;
     var dpr = Math.min(root.devicePixelRatio || 1, 2.5);
     this.W = r.width; this.H = r.height; this.dpr = dpr;
-    this.canvas.width = Math.round(r.width * dpr);
-    this.canvas.height = Math.round(r.height * dpr);
+    this.rect = r;
+    var self = this;
+    [this.canvas, this.fillCv, this.predCv].forEach(function (cv) {
+      if (!cv) return;
+      cv.width = Math.round(r.width * dpr);
+      cv.height = Math.round(r.height * dpr);
+    });
+    this._pr = null;
     this.bg.setAttribute('viewBox', '0 0 ' + this.W + ' ' + this.H);
     this.fx.setAttribute('viewBox', '0 0 ' + this.W + ' ' + this.H);
     if (!this.task) return;
@@ -145,6 +164,7 @@
     var cs = root.getComputedStyle(this.host);
     this.inkColor = (cs.getPropertyValue('--b-ink') || '').trim() || '#22335C';
     this.wrongColor = (cs.getPropertyValue('--b-wrong') || '').trim() || '#F5A3B1';
+    this.fillColor = (cs.getPropertyValue('--b-fill') || '').trim() || '#FFE08A';
     this.drawBg(); this.redraw(); this.drawFx();
   };
 
@@ -155,8 +175,8 @@
   Board.prototype.drawBg = function () {
     var bg = this.bg, W = this.W, self = this, comp = this.comp, s = this.s;
     while (bg.firstChild) bg.removeChild(bg.firstChild);
-    this.fills = []; this.slots = []; this._fi = 0;
-    if (!this.task || !comp) return;
+    this.slots = [];
+    if (!this.task || !comp) { this.redrawFill(); return; }
     var slant = Gl.styleOf(comp.style).slant, t = Math.tan(slant * Math.PI / 180), r;
     for (r = 0; r < comp.rows; r++) {
       var top = this.oy + r * Gl.ROW * s;
@@ -183,6 +203,13 @@
       var lg = el('g', { transform: 'translate(' + L.x.toFixed(2) + ' ' + L.y + ')' }, g);
       var ghost = self.ghost || (self.ghostSet && self.ghostSet[li]);
       var strokes = L.g.strokes;
+      if (L.fixed) {                    // 标点：直接印好，不用写
+        strokes.forEach(function (st) {
+          if (st.dot) el('circle', { 'class': 'g-fixed-dot', cx: st.pts[0].x, cy: st.pts[0].y, r: 6 }, lg);
+          else el('path', { 'class': 'g-fixed', d: st.d }, lg);
+        });
+        return;
+      }
       if (mode === 'trace' || ghost) {
         strokes.forEach(function (st) {
           if (st.dot) el('circle', { 'class': ghost ? 'g-ghost-dot' : 'g-road-dot', cx: st.pts[0].x, cy: st.pts[0].y, r: 7.5 }, lg);
@@ -190,13 +217,6 @@
         });
       }
       if (mode === 'trace') {
-        strokes.forEach(function (st, n) {
-          var f;
-          if (st.dot) f = el('circle', { 'class': 'g-fill-dot', cx: st.pts[0].x, cy: st.pts[0].y, r: 7.5 }, lg);
-          else f = el('path', { 'class': 'g-fill', d: st.d, pathLength: 100, 'stroke-dasharray': 100, 'stroke-dashoffset': 100 }, lg);
-          f.style.opacity = 0;
-          self.fills[L.first + n] = f;
-        });
         strokes.forEach(function (st) { if (!st.dot) el('path', { 'class': 'g-dash', d: st.d }, lg); });
       } else if (mode === 'dots') {
         strokes.forEach(function (st) {
@@ -208,27 +228,54 @@
     // “自己写”一个单词或一句话：每个字母下面一条短横线，告诉孩子这个字母写在哪儿；检查后变绿或变红
     if (mode === 'write' && !comp.single) {
       comp.letters.forEach(function (L, li) {
+        if (L.fixed) return;
         var m = self.marks && self.marks[li];
         self.slots[li] = el('line', { 'class': 'b-slot' + (m ? ' ' + m : ''), x1: L.x0 + 3, x2: L.x1 - 3, y1: L.y + 112, y2: L.y + 112 }, g);
       });
     }
-    this.updateFill();
+    this.redrawFill();
   };
 
-  // 只更新“刚写完的那一笔”和“正在写的这一笔”，长句子里不用每次把几十笔都刷一遍
-  Board.prototype.updateFill = function () {
-    if (!this.sess || !this.fills || !this.fills.length) return;
-    var s = this.sess, strokes = this.comp.strokes;
-    var to = Math.min(strokes.length - 1, s.si);
-    for (var i = this._fi || 0; i <= to; i++) {
-      var f = this.fills[i], st = strokes[i];
-      if (!f) continue;
-      if (st.dot) { f.style.opacity = i < s.si ? 1 : 0; continue; }
-      var frac = i < s.si ? 1 : s.prog / (st.pts.length - 1);
-      f.setAttribute('stroke-dashoffset', (100 * (1 - frac)).toFixed(1));
-      f.style.opacity = frac > 0 ? 1 : 0;      // 避免圆头在起点漏出一个小点
+  /* ---------- 描红进度：沿着字帖涂色 ----------
+     画在 canvas 上，只补画新走过的那一小段。以前是改 SVG 路径的属性，每动一下浏览器都要重算样式、重画字帖，
+     是写字时笔迹跟不上的主要原因。 */
+  Board.prototype.fillPiece = function (st, a, b) {
+    var c = this.fctx, s = this.s, ox = this.ox, oy = this.oy, p = st.pts;
+    c.fillStyle = c.strokeStyle = this.fillColor;
+    if (st.dot) {
+      c.beginPath(); c.arc(ox + p[0].x * s, oy + p[0].y * s, 7.5 * s, 0, 6.2832); c.fill();
+      return;
     }
-    this._fi = to;
+    if (b <= a) return;
+    c.lineWidth = 15 * s;
+    c.beginPath();
+    c.moveTo(ox + p[a].x * s, oy + p[a].y * s);
+    for (var i = a + 1; i <= b; i++) c.lineTo(ox + p[i].x * s, oy + p[i].y * s);
+    c.stroke();
+  };
+  Board.prototype.updateFill = function () {
+    var s = this.sess;
+    if (!s || !this.comp || this.task.mode !== 'trace') return;
+    var strokes = this.comp.strokes;
+    if (s.si < this._fs || (s.si === this._fs && s.prog < this._fp)) { this.redrawFill(); return; }   // 进度被撤回了：重画
+    while (this._fs < s.si) {
+      var done = strokes[this._fs];
+      this.fillPiece(done, this._fp, done.pts.length - 1);
+      this._fs++; this._fp = 0;
+    }
+    if (s.si < strokes.length && s.prog > this._fp) {
+      if (!strokes[s.si].dot) this.fillPiece(strokes[s.si], this._fp, s.prog);
+      this._fp = s.prog;
+    }
+  };
+  Board.prototype.redrawFill = function () {
+    var c = this.fctx;
+    if (!this.W) return;
+    c.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    c.clearRect(0, 0, this.W, this.H);
+    c.lineCap = 'round'; c.lineJoin = 'round';
+    this._fs = 0; this._fp = 0;
+    if (this.sess && this.comp && this.task && this.task.mode === 'trace') this.updateFill();
   };
 
   /* ---------- 起笔点、笔顺数字、方向箭头 ---------- */
@@ -327,8 +374,9 @@
   };
   Board.prototype.base = function () { return Math.max(2.4, this.s * 5.4); };
 
-  // 画出以第 i 个点结尾的那一小段（用中点做二次曲线，线条更圆滑）
-  Board.prototype.drawSeg = function (ink, i, last) {
+  // 画出以第 i 个点结尾的那一小段：先用中点做二次曲线（线条圆滑），再从中点直接连到这个点。
+  // 后面这一小截很关键：不画它，墨迹永远停在上两个点的中间，看起来就像笔迹跟不上笔尖。
+  Board.prototype.drawSeg = function (ink, i) {
     var c = this.ctx, p = ink.pts, s = this.s, ox = this.ox, oy = this.oy;
     var b = p[i];
     if (p.length === 1) {
@@ -339,10 +387,11 @@
     if (i < 1) return;
     var a = p[i - 1];
     var m1x = i >= 2 ? (p[i - 2].x + a.x) / 2 : a.x, m1y = i >= 2 ? (p[i - 2].y + a.y) / 2 : a.y;
-    var m2x = last ? b.x : (a.x + b.x) / 2, m2y = last ? b.y : (a.y + b.y) / 2;
+    var m2x = (a.x + b.x) / 2, m2y = (a.y + b.y) / 2;
     c.beginPath();
     c.moveTo(ox + m1x * s, oy + m1y * s);
     c.quadraticCurveTo(ox + a.x * s, oy + a.y * s, ox + m2x * s, oy + m2y * s);
+    c.lineTo(ox + b.x * s, oy + b.y * s);
     c.lineWidth = this.base() * (a.w + b.w) / 2;
     c.strokeStyle = this.color(b);
     c.stroke();
@@ -357,18 +406,42 @@
     for (var k = 0; k < this.inks.length; k++) {
       var ink = this.inks[k], n = ink.pts.length;
       if (n === 1) { this.drawSeg(ink, 0); continue; }
-      for (var i = 1; i < n; i++) this.drawSeg(ink, i, false);
-      if (n > 1 && ink !== (this.active && this.active.ink)) this.drawTail(ink);
+      for (var i = 1; i < n; i++) this.drawSeg(ink, i);
     }
   };
-  Board.prototype.drawTail = function (ink) {
-    var p = ink.pts, n = p.length, c = this.ctx, s = this.s;
-    if (n < 2) return;
-    var a = p[n - 2], b = p[n - 1];
-    c.beginPath();
-    c.moveTo(this.ox + (a.x + b.x) / 2 * s, this.oy + (a.y + b.y) / 2 * s);
-    c.lineTo(this.ox + b.x * s, this.oy + b.y * s);
-    c.lineWidth = this.base() * b.w; c.strokeStyle = this.color(b); c.stroke();
+
+  /* ---------- 预测：往笔尖前面多画一小段 ----------
+     从落笔到墨迹显示在屏幕上总要隔一两帧。浏览器能预测笔尖下一步去哪儿时，先把那一小段画在单独的一层上，
+     下一次移动时擦掉重画，看起来墨迹就贴着笔尖了。预测可能不准，所以它不进正式的墨迹，也不参与判定。 */
+  Board.prototype.clearPred = function () {
+    if (!this.pctx || !this._pr) return;
+    var r = this._pr;
+    this.pctx.clearRect(r[0], r[1], r[2], r[3]);
+    this._pr = null;
+  };
+  Board.prototype.predict = function (e) {
+    var c = this.pctx, a = this.active;
+    if (!c || !a) return;
+    this.clearPred();
+    var p = a.ink.pts;
+    if (a.ink.dead || !p.length || !e.getPredictedEvents) return;
+    var list = e.getPredictedEvents();
+    if (!list || !list.length) return;
+    var last = p[p.length - 1], r = this.rect, w = this.base() * last.w, budget = 28;   // 最多往前画 28 像素，拐弯时不会甩出去太远
+    var x = this.ox + last.x * this.s, y = this.oy + last.y * this.s;
+    var minX = x, maxX = x, minY = y, maxY = y;
+    c.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    c.lineCap = 'round'; c.lineJoin = 'round';
+    c.beginPath(); c.moveTo(x, y);
+    for (var i = 0; i < list.length && budget > 0; i++) {
+      var nx = list[i].clientX - r.left, ny = list[i].clientY - r.top, d = Math.hypot(nx - x, ny - y);
+      if (d > budget) { nx = x + (nx - x) * budget / d; ny = y + (ny - y) * budget / d; d = budget; }
+      budget -= d; x = nx; y = ny;
+      c.lineTo(x, y);
+      if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y;
+    }
+    c.lineWidth = w; c.strokeStyle = this.color(last); c.stroke();
+    this._pr = [minX - w - 2, minY - w - 2, maxX - minX + 2 * w + 4, maxY - minY + 2 * w + 4];
   };
 
   /* ---------- 输入 ---------- */
@@ -381,8 +454,9 @@
     }
     return true;
   };
+  // 板子的位置在落笔时量一次，笔在动的时候不再量：边改边量会逼着浏览器每动一下就重新排版
   Board.prototype.toGlyph = function (e) {
-    var r = this.host.getBoundingClientRect();
+    var r = this.rect;
     return { x: (e.clientX - r.left - this.ox) / this.s, y: (e.clientY - r.top - this.oy) / this.s };
   };
   Board.prototype.width = function (e, prev) {
@@ -406,6 +480,8 @@
     e.preventDefault();
     try { this.host.setPointerCapture(e.pointerId); } catch (err) {}
     this.stopDemo();
+    this.rect = this.host.getBoundingClientRect();
+    this.host.classList.add('drawing');          // 写的时候起笔点不闪（闪烁动画每帧都要重画）
     var p = this.toGlyph(e);
     var ink = { pts: [], si: this.sess ? this.sess.si : 0 };
     this.inks.push(ink);
@@ -425,12 +501,7 @@
     if (prev) this.dist += Math.hypot(p.x - prev.x, p.y - prev.y);
     ink.pts.push({ x: p.x, y: p.y, w: w, st: ST[st] || 0, d: this.dist });
     var n = ink.pts.length;
-    if (n === 1) this.drawSeg(ink, 0);
-    else {
-      if (n === 2) {                      // 第二个点来了：把起笔的小圆点重画成线段的一部分
-        this.drawSeg(ink, 1, false);
-      } else this.drawSeg(ink, n - 1, false);
-    }
+    this.drawSeg(ink, n - 1);
   };
 
   Board.prototype.feed = function (e) {
@@ -457,12 +528,15 @@
     if (!list || !list.length) list = [e];
     for (var i = 0; i < list.length; i++) this.feed(list[i]);
     this.updateFill();
+    this.predict(e);
   };
 
   Board.prototype.dropActive = function () {
     var a = this.active;
     if (!a) return;
     this.active = null;
+    this.clearPred();
+    this.host.classList.remove('drawing');
     if (this.sess) this.sess.cancel();
     if (!this.sess || this.sess.si === a.si0) {
       var i = this.inks.indexOf(a.ink);
@@ -476,16 +550,15 @@
     if (!a || e.pointerId !== a.id) return;
     if (cancelled) { this.dropActive(); this.drawFx(); return; }
     this.active = null;
+    this.clearPred();
+    this.host.classList.remove('drawing');
     var r = this.sess ? this.sess.up() : { discard: false };
     if (r.discard || a.ink.dead) {
       var i = this.inks.indexOf(a.ink);
       if (i >= 0) this.inks.splice(i, 1);
       this.redraw();
       if (r.reason && this.cb.onHint) this.cb.onHint(r.reason);
-    } else {
-      this.drawTail(a.ink);
-      if (this.cb.onInk) this.cb.onInk(this.inks.length);
-    }
+    } else if (this.cb.onInk) this.cb.onInk(this.inks.length);
     this.updateFill();
     this.drawFx();
   };
@@ -533,19 +606,20 @@
   /*
    * 逐个字母检查（分几帧做完，横线会一个个变绿或变红）。
    * done 收到 {pass, stars, acc, ok, total, bad:[字母序号]}：
-   * 短的单词要求全对；长句子每 12 个字符允许 1 个没认出来，免得识别偶尔看走眼就卡住孩子。
+   * 短的单词要求全对；长一点的每 8 个字母允许 1 个没认出来，免得识别偶尔看走眼就卡住孩子。标点不检查。
    */
   Board.prototype.checkText = function (done) {
-    var self = this, comp = this.comp, per = this.assign(), i = 0, n = comp.letters.length;
+    var self = this, comp = this.comp, per = this.assign(), i = 0, total = comp.letters.length;
+    var n = comp.letters.filter(function (L) { return !L.fixed; }).length;     // 标点不算在内
     var okN = 0, starSum = 0, accSum = 0, bad = [], task = this.task;
     this.marks = [];
     function step() {
       if (self.task !== task || self.comp !== comp) return;        // 中途换题了
       var t0 = Date.now();
-      while (i < n && Date.now() - t0 < 14) {
+      while (i < total && Date.now() - t0 < 14) {
         var L = comp.letters[i], inks = per[i], r;
+        if (L.fixed) { i++; continue; }                 // 标点：孩子写不写都行，不检查
         if (!inks.length) r = { ok: false };
-        else if (Gl.kindOf(L.ch) === 'punct') r = { ok: true, stars: 3, acc: 1 };      // 标点只看写没写
         else {
           r = En.recognize(solid(inks.map(function (k) {
             return k.pts.map(function (p) { return { x: p.x - L.x, y: p.y - L.y }; });
@@ -556,8 +630,8 @@
         if (self.slots[i]) self.slots[i].setAttribute('class', 'b-slot ' + self.marks[i]);
         i++;
       }
-      if (i < n) { root.requestAnimationFrame(step); return; }
-      var miss = n - okN, q = okN ? starSum / okN : 0, pass = miss <= Math.floor(n / 12);
+      if (i < total) { root.requestAnimationFrame(step); return; }
+      var miss = n - okN, q = okN ? starSum / okN : 0, pass = miss <= Math.floor(n / 8);
       var stars = !pass ? 0 : (miss === 0 && q >= 2.4) ? 3 : q >= 1.7 ? 2 : 1;
       if (miss > 0) stars = Math.min(stars, 2);
       done({ pass: pass, stars: stars, acc: okN ? (accSum / okN) * (okN / n) : 0, ok: okN, total: n, bad: bad });

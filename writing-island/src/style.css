@@ -227,19 +227,19 @@ h1, h2, h3 { text-wrap: balance; }
 .board-wrap.lift .board { bottom: var(--banner-h, 0px); }
 .board {
   --b-paper: #FFFFFF; --b-line: #A9CDF2; --b-base: #FF8474; --b-road: #E4EBF6; --b-dash: #9FB0CC;
-  --b-fill: #FFE08A; --b-ink: #22335C; --b-wrong: #F4A0B0; --b-start: #1FAE70; --b-next: #9FB0CC;
+  --b-fill: #FFE08A; --b-fill-a: 1; --b-ink: #22335C; --b-wrong: #F4A0B0; --b-start: #1FAE70; --b-next: #9FB0CC;
   --b-demo: #2B8CFF; --b-ghost: rgba(43, 140, 255, .22); --b-bad: #E5486A;
   position: absolute; inset: 0; background: var(--b-paper); touch-action: none; cursor: crosshair;
 }
 .board[data-skin="mint"] { --b-paper: #EAF6E1; --b-line: #9CCB9A; --b-base: #F08A6C; --b-road: #D3E7C8; --b-dash: #86A886; --b-next: #86A886; }
 .board[data-skin="chalk"] {
   --b-paper: #22463F; --b-line: rgba(255, 255, 255, .42); --b-base: #FFAE9C; --b-road: rgba(255, 255, 255, .15); --b-dash: rgba(255, 255, 255, .58);
-  --b-fill: rgba(255, 214, 102, .45); --b-ink: #FBFBF2; --b-wrong: #FF9BAE; --b-start: #57D9A0; --b-next: rgba(255, 255, 255, .5);
+  --b-fill: #FFD666; --b-fill-a: .45; --b-ink: #FBFBF2; --b-wrong: #FF9BAE; --b-start: #57D9A0; --b-next: rgba(255, 255, 255, .5);
   --b-demo: #7CC4FF; --b-ghost: rgba(124, 196, 255, .35); --b-bad: #FF8FA3;
 }
 .board[data-skin="night"] {
   --b-paper: #121A3E; --b-line: rgba(160, 190, 255, .42); --b-base: #FF9A8A; --b-road: rgba(160, 190, 255, .17); --b-dash: rgba(190, 210, 255, .62);
-  --b-fill: rgba(255, 214, 102, .5); --b-ink: #F3F6FF; --b-wrong: #FF9BAE; --b-start: #57D9A0; --b-next: rgba(190, 210, 255, .55);
+  --b-fill: #FFD666; --b-fill-a: .5; --b-ink: #F3F6FF; --b-wrong: #FF9BAE; --b-start: #57D9A0; --b-next: rgba(190, 210, 255, .55);
   --b-demo: #7CC4FF; --b-ghost: rgba(124, 196, 255, .35); --b-bad: #FF8FA3;
   background-image: radial-gradient(#FFFFFF 1px, transparent 1.6px), radial-gradient(rgba(255, 255, 255, .6) 1px, transparent 1.4px);
   background-size: 130px 110px, 90px 150px; background-position: 20px 30px, 60px 80px;
@@ -252,12 +252,14 @@ h1, h2, h3 { text-wrap: balance; }
 .b-slot { stroke: var(--b-dash); stroke-width: 5; stroke-linecap: round; }
 .b-slot.ok { stroke: var(--b-start); }
 .b-slot.bad { stroke: var(--b-bad); }
-.g-road, .g-fill, .g-ghost { fill: none; stroke-width: 15; stroke-linecap: round; stroke-linejoin: round; }
+.g-road, .g-ghost { fill: none; stroke-width: 15; stroke-linecap: round; stroke-linejoin: round; }
 .g-road { stroke: var(--b-road); }
-.g-fill { stroke: var(--b-fill); }
 .g-ghost { stroke: var(--b-ghost); }
 .g-road-dot { fill: var(--b-road); }
-.g-fill-dot { fill: var(--b-fill); opacity: 0; }
+.g-fixed { fill: none; stroke: var(--b-dash); stroke-width: 9; stroke-linecap: round; stroke-linejoin: round; }
+.g-fixed-dot { fill: var(--b-dash); }
+.b-fillcv { opacity: var(--b-fill-a, 1); }
+.board.drawing .fx-pulse { display: none; }
 .g-ghost-dot { fill: var(--b-ghost); }
 .g-dash { fill: none; stroke: var(--b-dash); stroke-width: 1.4; stroke-dasharray: 3.5 3.5; stroke-linecap: round; stroke-linejoin: round; }
 .g-dots { fill: none; stroke: var(--b-dash); stroke-width: 3; stroke-dasharray: .1 7; stroke-linecap: round; stroke-linejoin: round; }

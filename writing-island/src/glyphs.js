@@ -102,7 +102,7 @@
   G['y'] = ['M26 50 L50 100', 'M74 50 L26 150'];
   G['z'] = ['M26 50 L74 50 L26 100 L74 100'];
 
-  /* ---------- 标点（写句子时用） ---------- */
+  /* ---------- 标点（句子里只印出来，不要求孩子写） ---------- */
   G['.'] = ['M50 93 L50 94'];
   G[','] = ['M53 90 C55 100 51 108 43 114'];
   G['!'] = ['M50 0 L50 66', 'M50 93 L50 94'];
@@ -303,8 +303,10 @@
           if (i) x += kindOf(word[i]) === 'punct' ? GAP / 2 : GAP;
           var gw = advance(g), bw = g.box.maxX - g.box.minX;
           var dx = x + (gw - bw) / 2 - g.box.minX, dy = r * ROW;
-          var L = { ch: word[i], x: dx, y: dy, row: r, x0: x, x1: x + gw, g: g, first: strokes.length, n: g.strokes.length };
-          g.strokes.forEach(function (s, k) {
+          // 标点（fixed）只印在格子里让句子读得通，不进笔画表：不用描、不用写、也不检查
+          var fixed = kindOf(word[i]) === 'punct';
+          var L = { ch: word[i], x: dx, y: dy, row: r, x0: x, x1: x + gw, g: g, fixed: fixed, first: strokes.length, n: fixed ? 0 : g.strokes.length };
+          if (!fixed) g.strokes.forEach(function (s, k) {
             strokes.push({
               pts: s.pts.map(function (p) { return { x: p.x + dx, y: p.y + dy }; }),
               dot: s.dot, len: s.len, d: s.d, letter: letters.length, k: k

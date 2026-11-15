@@ -100,6 +100,7 @@
   function confetti(amount) {
     if (reduceMotion) return;
     var cv = doc.getElementById('confetti'), c = cv.getContext('2d');
+    cv.hidden = false;
     var W = (cv.width = root.innerWidth), H = (cv.height = root.innerHeight);
     var colors = ['#FFC533', '#FF6B57', '#2B8CFF', '#23B777', '#8257F5', '#19C3D6'];
     var ps = [], n = amount || 70, run = ++confettiRun;
@@ -116,7 +117,7 @@
       if (t0 === null) t0 = t;
       var age = (t - t0) / 1000;
       c.clearRect(0, 0, W, H);
-      if (age > 2.2) return;
+      if (age > 2.2) { cv.hidden = true; return; }      // 放完就收起来，不让一整屏的透明图层一直叠在写字板上
       ps.forEach(function (p) {
         p.vy += 0.42; p.vx *= 0.99; p.x += p.vx; p.y += p.vy; p.a += p.va;
         c.save(); c.translate(p.x, p.y); c.rotate(p.a);
@@ -228,7 +229,7 @@
       header(w.name, 'home', '<span class="chip chip-star">' + icon('star', 'on') + '<b>' + p.stars + '</b><small>/' + p.maxStars + '</small></span>') +
       '<div class="scroll map-scroll"><div class="track" id="track"><svg class="track-path" aria-hidden="true"><path id="trackPath"/></svg>' + nodes + '</div>' +
       '<p class="map-tip">' + (id === 'word' ? '每个单词先描红，再自己写：每条小横线上写一个字母。'
-        : id === 'sent' ? '句子从两个词开始，越来越长；最后两关是把几句话连起来，自己写出一小段。'
+        : id === 'sent' ? '句子从两个词开始，越来越长；最后两关是把几句话连起来，自己写出一小段。标点已经印好，不用写。'
         : '每一关都是三步：先描红，再写虚线，最后自己写。全部三颗星有额外的宝石。') + '</p></div></section>';
     layoutMap();
     var nextEl = app.querySelector('.node.next');
@@ -286,7 +287,7 @@
   var INTRO_TEXT = {
     trace: ['一个字母一个字母地描，写完一个接着下一个', '跟着圆点走，把每个字母描出来'],
     dots: ['沿着虚线，把每个字母写出来'],
-    write: ['每条小横线上写一个字母', '看着示范，一个字母一个字母地写']
+    write: ['每条小横线上写一个字母，标点不用写', '看着示范，一个字母一个字母地写']
   };
   var HINT = {
     start: '要从闪亮的圆点开始写哦',
@@ -457,7 +458,7 @@
       play.fails++;
       Sfx.oops(); shake();
       if (play.fails >= 3) {
-        if (r.ok / r.total >= 0.7) { finishTask(1, r.acc * 0.8, '还有 ' + miss + ' 个字母要多练'); return; }
+        if (r.ok / r.total >= 0.6) { finishTask(1, r.acc * 0.8, '还有 ' + miss + ' 个字母要多练'); return; }
         play.assist = true;
         say('没关系，照着描一遍', true);
         $('#btnCheck').hidden = true;
