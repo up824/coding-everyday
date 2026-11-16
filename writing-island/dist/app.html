@@ -31,7 +31,8 @@
   --grape-deep: #5F37CC;
   --leaf: #1FAE70;         /* 写对了、起笔点 */
   --leaf-deep: #14845A;
-  --gem: #12B8CC;          /* 宝石 */
+  --gem: #12B8CC;          /* 宝石、算术岛 */
+  --gem-deep: #0B8797;
   --rose: #E5486A;         /* 提醒 */
   --rose-deep: #B32E4C;
   --warn-bg: #FFF0D2;
@@ -138,11 +139,12 @@ h1, h2, h3 { text-wrap: balance; }
 .font-btn .ic { width: 20px; height: 20px; color: var(--ink-2); }
 .islands { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 16px; }
 .island { grid-column: span 2; }
-.island.island-wide { grid-column: span 3; flex-direction: row; align-items: stretch; }
-.island.island-wide .island-art { flex: none; width: 40%; display: flex; align-items: center; padding: 12px 14px; }
+.island.island-wide { grid-column: span 2; flex-direction: row; align-items: stretch; }
+.island.island-wide .island-art { flex: none; width: 44%; display: flex; align-items: center; padding: 12px; }
 .island.island-wide .island-info { flex: 1; min-width: 0; justify-content: center; }
 .w-word { --accent: var(--leaf); --accent-deep: var(--leaf-deep); }
 .w-sent { --accent: var(--gold); --accent-deep: var(--sun-deep); }
+.w-math { --accent: var(--gem); --accent-deep: var(--gem-deep); }
 .island { display: flex; flex-direction: column; text-align: left; background: var(--card); border-radius: 26px; overflow: hidden; box-shadow: 0 6px 0 var(--accent-deep); min-width: 0; }
 .island:active { transform: translateY(4px); box-shadow: 0 2px 0 var(--accent-deep); }
 .island-art { display: block; padding: 14px 12px 8px; background: var(--accent); color: var(--on-accent); overflow: hidden; }
@@ -687,6 +689,13 @@ h1, h2, h3 { text-wrap: balance; }
   G['y'] = ['M26 50 L50 100', 'M74 50 L26 150'];
   G['z'] = ['M26 50 L74 50 L26 100 L74 100'];
 
+  /* ---------- 运算符号（要孩子自己写）。和数字一样高，居中在第二线上 ---------- */
+  G['+'] = ['M24 50 L76 50', 'M50 24 L50 76'];
+  G['-'] = ['M24 50 L76 50'];
+  G['×'] = ['M29 29 L71 71', 'M71 29 L29 71'];
+  G['÷'] = ['M22 50 L78 50', 'M50 26 L50 27', 'M50 73 L50 74'];
+  G['='] = ['M24 38 L76 38', 'M24 62 L76 62'];
+
   /* ---------- 标点（句子里只印出来，不要求孩子写） ---------- */
   G['.'] = ['M50 93 L50 94'];
   G[','] = ['M53 90 C55 100 51 108 43 114'];
@@ -828,6 +837,7 @@ h1, h2, h3 { text-wrap: balance; }
   }
 
   var DIGITS = '0123456789'.split('');
+  var OPS = ['+', '-', '×', '÷', '='];
   var UPPER = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
   var LOWER = 'abcdefghijklmnopqrstuvwxyz'.split('');
 
@@ -835,6 +845,7 @@ h1, h2, h3 { text-wrap: balance; }
     if (ch >= '0' && ch <= '9') return 'num';
     if (ch >= 'A' && ch <= 'Z') return 'upper';
     if (ch >= 'a' && ch <= 'z') return 'lower';
+    if (OPS.indexOf(ch) >= 0) return 'op';
     return 'punct';
   }
 
@@ -905,7 +916,9 @@ h1, h2, h3 { text-wrap: balance; }
     return { text: text, style: st.id, single: false, rows: w.lines.length, width: w.width, height: (w.lines.length - 1) * ROW + 150, letters: letters, strokes: strokes };
   }
   // 在 W×H（像素）的板子上，折成几行字最大：返回 {comp, scale}
-  function fit(text, styleId, W, H, cap) {
+  // comfy：字大到这个程度就不再多折一行（算式传得小一些，尽量整条排在一行里）
+  function fit(text, styleId, W, H, cap, comfy) {
+    comfy = comfy || COMFY;
     var st = styleOf(styleId || current);
     if (text.length === 1) return { comp: compose(text, st.id), scale: Math.min(H / ROW, W / 150) };
     var one = wrap(text, st.id, 0), longest = 0;
@@ -921,7 +934,7 @@ h1, h2, h3 { text-wrap: balance; }
       var sc = Math.min(W / (wr.width + 60), H / (wr.lines.length * ROW));
       if (cap) sc = Math.min(sc, cap);
       // 字已经够大就不再多折一行；不够大时，多一行至少要大 8% 才值得
-      if (!best || (best.scale < COMFY && sc > best.scale * 1.08)) best = { maxW: hi, scale: sc, rows: wr.lines.length };
+      if (!best || (best.scale < comfy && sc > best.scale * 1.08)) best = { maxW: hi, scale: sc, rows: wr.lines.length };
       if (wr.lines.length < r) break;
     }
     return { comp: compose(text, st.id, best.maxW), scale: best.scale };
@@ -950,7 +963,7 @@ h1, h2, h3 { text-wrap: balance; }
     style: function () { return styleOf(current); },
     setStyle: function (id) { current = styleOf(id).id; },
     PIVOT: PIVOT, resample: resample, polyLength: polyLength,
-    DIGITS: DIGITS, UPPER: UPPER, LOWER: LOWER, ALL: DIGITS.concat(UPPER, LOWER), STEP: STEP
+    DIGITS: DIGITS, UPPER: UPPER, LOWER: LOWER, OPS: OPS, ALL: DIGITS.concat(UPPER, LOWER), STEP: STEP
   };
 })(typeof window !== 'undefined' ? window : globalThis);
 
@@ -1254,7 +1267,8 @@ h1, h2, h3 { text-wrap: balance; }
   }
 
   // 形状一样、只靠大小和占格区分的字符：互相不算“写错”
-  var GROUPS = ['cC', 'oO0', 'sS', 'vV', 'wW', 'xX', 'zZ', 'uU', 'kK', 'pP', '1lI'];
+  // 乘号和 x 一个样；加号和小写 t 只差一点点，也互相不算错
+  var GROUPS = ['cC', 'oO0', 'sS', 'vV', 'wW', 'xX×', 'zZ', 'uU', 'kK', 'pP', '1lI', '+t'];
   function mates(a, b) {
     for (var i = 0; i < GROUPS.length; i++) {
       if (GROUPS[i].indexOf(a) >= 0 && GROUPS[i].indexOf(b) >= 0) return true;
@@ -1265,7 +1279,7 @@ h1, h2, h3 { text-wrap: balance; }
   var templates = null;
   function getTemplates() {
     if (templates) return templates;
-    templates = Gl.ALL.map(function (ch) {
+    templates = Gl.ALL.concat(Gl.OPS).map(function (ch) {
       return {
         ch: ch, box: Gl.get(ch).box,
         clouds: Gl.variants(ch).map(function (v) { return toCloud(v).pts; })
@@ -1391,7 +1405,7 @@ h1, h2, h3 { text-wrap: balance; }
 })(typeof window !== 'undefined' ? window : globalThis);
 
 /*
- * 写字岛 — 单词和句子
+ * 写字岛 — 单词、句子、多位数和算式
  *
  * 每一项是 [英文, 中文意思]。句子按单词数从少到多排：两个词 → 十二个词 → 连成一小段话。
  * 只能用字母、数字、空格和 . , ? ! ' 这几个标点（笔画数据里有的字符）。
@@ -1429,14 +1443,69 @@ h1, h2, h3 { text-wrap: balance; }
     { title: '一段话：我的一天', para: true, items: [['I get up at seven.', '我七点起床。'], ['I go to school with my friends.', '我和朋友们一起去上学。'], ['After school I read books and play football.', '放学后我看书、踢足球。'], ['I go to bed at nine.', '我九点睡觉。']] }
   ];
 
+  /* ---------- 多位数和算式 ----------
+     只写式子本身，中文读法（三加五等于八）由下面的函数算出来。减号用键盘上的 -，乘除用 × ÷。 */
+  var MATH_SRC = [
+    { title: '两位数', items: ['10', '25', '48', '60', '99'] },
+    { title: '几百', items: ['100', '256', '380', '705', '999'] },
+    { title: '几千', items: ['1000', '2048', '3650', '5007', '9999'] },
+    { title: '运算符号', items: ['+', '-', '×', '÷', '='] },
+    { title: '加法', items: ['3 + 5 = 8', '12 + 7 = 19', '25 + 30 = 55', '140 + 60 = 200'] },
+    { title: '减法', items: ['9 - 4 = 5', '15 - 8 = 7', '60 - 25 = 35', '500 - 120 = 380'] },
+    { title: '乘法', items: ['2 × 3 = 6', '6 × 7 = 42', '12 × 4 = 48', '25 × 4 = 100'] },
+    { title: '除法', items: ['8 ÷ 2 = 4', '24 ÷ 6 = 4', '81 ÷ 9 = 9', '100 ÷ 5 = 20'] },
+    { title: '大数算式', items: ['125 + 375 = 500', '1000 - 250 = 750', '300 × 3 = 900', '2400 ÷ 6 = 400'] }
+  ];
+
+  var ZD = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九'], ZU = ['', '十', '百', '千'];
+  function numZh(n) {
+    var str = String(n), out = '', gap = false;
+    if (n === 0) return ZD[0];
+    for (var i = 0; i < str.length; i++) {
+      var c = +str[i];
+      if (c === 0) { gap = true; continue; }
+      if (gap && out) out += ZD[0];              // 中间有 0：七百零五
+      gap = false;
+      out += ZD[c] + ZU[str.length - 1 - i];
+    }
+    return n >= 10 && n < 20 ? out.replace(/^一十/, '十') : out;
+  }
+  var E1 = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve',
+    'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen'];
+  var E10 = ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'];
+  function numEn(n) {
+    if (n < 20) return E1[n];
+    if (n < 100) return E10[Math.floor(n / 10)] + (n % 10 ? '-' + E1[n % 10] : '');
+    if (n < 1000) return E1[Math.floor(n / 100)] + ' hundred' + (n % 100 ? ' ' + numEn(n % 100) : '');
+    return numEn(Math.floor(n / 1000)) + ' thousand' + (n % 1000 ? ' ' + numEn(n % 1000) : '');
+  }
+  var OP_ZH = { '+': '加', '-': '减', '×': '乘', '÷': '除以', '=': '等于' };
+  var OP_EN = { '+': 'plus', '-': 'minus', '×': 'times', '÷': 'divided by', '=': 'equals' };
+  var SIGN_ZH = { '+': '加号', '-': '减号', '×': '乘号', '÷': '除号', '=': '等号' };
+  var SIGN_EN = { '+': 'plus sign', '-': 'minus sign', '×': 'times sign', '÷': 'division sign', '=': 'equals sign' };
+  function isMath(text) { return /^[0-9+\-×÷= ]+$/.test(text); }
+  function readMath(text, en) {
+    if (text.length === 1 && OP_ZH[text]) return en ? SIGN_EN[text] : SIGN_ZH[text];
+    return text.split(' ').map(function (tok) {
+      if (/^[0-9]+$/.test(tok)) return en ? numEn(+tok) : numZh(+tok);
+      return en ? OP_EN[tok] : OP_ZH[tok];
+    }).join(en ? ' ' : '');
+  }
+  var MATH = MATH_SRC.map(function (g) {
+    return { title: g.title, items: g.items.map(function (t) { return [t, readMath(t, false)]; }) };
+  });
+
   var zh = {};
-  WORDS.concat(SENTS).forEach(function (g) { g.items.forEach(function (it) { zh[it[0]] = it[1]; }); });
+  WORDS.concat(SENTS, MATH).forEach(function (g) { g.items.forEach(function (it) { zh[it[0]] = it[1]; }); });
 
   function wordCount(text) { return text.split(' ').length; }
   function letterCount(text) { return text.replace(/ /g, '').length; }
 
   root.WI = root.WI || {};
-  root.WI.Words = { WORDS: WORDS, SENTS: SENTS, zh: zh, wordCount: wordCount, letterCount: letterCount };
+  root.WI.Words = {
+    WORDS: WORDS, SENTS: SENTS, MATH: MATH, zh: zh, wordCount: wordCount, letterCount: letterCount,
+    isMath: isMath, readMath: readMath, numZh: numZh, numEn: numEn
+  };
 })(typeof window !== 'undefined' ? window : globalThis);
 
 /*
@@ -1457,7 +1526,8 @@ h1, h2, h3 { text-wrap: balance; }
     { id: 'num', name: '数字岛', short: '数字', sample: '123', range: '0 – 9', chars: Gl.DIGITS, groups: [['1', '2', '3'], ['4', '5', '6'], ['7', '8', '9', '0']], bossN: 10 },
     { id: 'upper', name: '大写字母岛', short: '大写', sample: 'ABC', range: 'A – Z', chars: Gl.UPPER, groups: chunk(Gl.UPPER, 3), bossN: 8 },
     { id: 'lower', name: '小写字母岛', short: '小写', sample: 'abc', range: 'a – z', chars: Gl.LOWER, groups: chunk(Gl.LOWER, 3), bossN: 8 },
-    // 单词和句子：text 为真，关卡里放的是一串文字而不是单个字符
+    // 算式、单词和句子：text 为真，关卡里放的是一串文字而不是单个字符
+    { id: 'math', name: '算术岛', short: '算术', sample: '1+2=3', text: true, groups: Wd.MATH, bossN: 6 },
     { id: 'word', name: '单词岛', short: '单词', sample: 'cat', text: true, groups: Wd.WORDS, bossN: 6 },
     { id: 'sent', name: '句子岛', short: '句子', sample: 'I can.', text: true, groups: Wd.SENTS, bossN: 0 }
   ];
@@ -1733,6 +1803,7 @@ h1, h2, h3 { text-wrap: balance; }
     { id: 'num', name: '数字岛岛主', desc: '通关数字岛', test: function () { return worldCleared('num'); } },
     { id: 'upper', name: '大写岛岛主', desc: '通关大写字母岛', test: function () { return worldCleared('upper'); } },
     { id: 'lower', name: '小写岛岛主', desc: '通关小写字母岛', test: function () { return worldCleared('lower'); } },
+    { id: 'math', name: '算术岛岛主', desc: '通关算术岛', test: function () { return worldCleared('math'); } },
     { id: 'word', name: '单词岛岛主', desc: '通关单词岛', test: function () { return worldCleared('word'); } },
     { id: 'sent', name: '会写一段话', desc: '通关句子岛', test: function () { return worldCleared('sent'); } },
     { id: 'd3', name: '坚持 3 天', desc: '连续 3 天来练字', test: function () { return streak() >= 3; } },
@@ -1930,39 +2001,37 @@ h1, h2, h3 { text-wrap: balance; }
     if (kind === 'num') return '写数字 ' + ch;
     return (kind === 'upper' ? '写大写字母 ' : '写小写字母 ') + ch.toUpperCase();
   }
-  function say(ch) {
-    var lang = Store.s.set.voice;
-    if (lang === 'off') return;
-    // 在 iPadOS App 里用系统的朗读，比网页朗读更稳
-    if (Store.native({ type: 'speak', text: promptText(ch, lang), lang: lang === 'en' ? 'en-US' : 'zh-CN' })) return;
-    try {
-      var synth = root.speechSynthesis;
-      if (!synth || !root.SpeechSynthesisUtterance) return;
-      synth.cancel();
-      var u = new root.SpeechSynthesisUtterance(promptText(ch, lang));
-      u.lang = lang === 'en' ? 'en-US' : 'zh-CN';
-      u.rate = 0.9;
-      synth.speak(u);
-    } catch (e) { /* 有的环境不让朗读，没关系 */ }
-  }
-
-  // 朗读一个单词或一句话（内容是英文，所以总是用英文读）
-  function sayText(text) {
-    if (Store.s.set.voice === 'off') return;
-    if (Store.native({ type: 'speak', text: text, lang: 'en-US' })) return;
+  // 朗读一段文字。在 iPadOS App 里用系统的朗读，比网页朗读更稳。
+  function speak(text, lang, rate) {
+    if (Store.native({ type: 'speak', text: text, lang: lang })) return;
     try {
       var synth = root.speechSynthesis;
       if (!synth || !root.SpeechSynthesisUtterance) return;
       synth.cancel();
       var u = new root.SpeechSynthesisUtterance(text);
-      u.lang = 'en-US';
-      u.rate = 0.8;
+      u.lang = lang;
+      u.rate = rate || 0.9;
       synth.speak(u);
-    } catch (e) {}
+    } catch (e) { /* 有的环境不让朗读，没关系 */ }
+  }
+  function say(ch) {
+    var lang = Store.s.set.voice;
+    if (lang === 'off') return;
+    speak(promptText(ch, lang), lang === 'en' ? 'en-US' : 'zh-CN');
+  }
+  // 单词、句子：内容是英文，所以总是用英文读
+  function sayText(text) {
+    if (Store.s.set.voice !== 'off') speak(text, 'en-US', 0.8);
+  }
+  // 数和算式：按设置里的语言读（三加五等于八 / three plus five equals eight）
+  function sayMath(text) {
+    var lang = Store.s.set.voice;
+    if (lang === 'off') return;
+    speak(root.WI.Words.readMath(text, lang === 'en'), lang === 'en' ? 'en-US' : 'zh-CN', 0.85);
   }
 
   root.WI.Sfx = Sfx;
-  root.WI.Voice = { say: say, sayText: sayText, promptText: promptText };
+  root.WI.Voice = { say: say, sayText: sayText, sayMath: sayMath, promptText: promptText };
 })(typeof window !== 'undefined' ? window : globalThis);
 
 /*
@@ -2119,7 +2188,7 @@ h1, h2, h3 { text-wrap: balance; }
       // 已经动笔了：板子大小变了（转屏、成绩条出现）也不重新折行，只是整体放大缩小，写好的笔迹跟着走
       this.s = c.single ? single : Math.min(this.W / (c.width + 60), this.H / (c.rows * Gl.ROW), single);
     } else {
-      var fitted = Gl.fit(this.text, null, this.W, this.H, single);
+      var fitted = Gl.fit(this.text, null, this.W, this.H, single, root.WI.Words.isMath(this.text) ? 0.62 : 0);
       this.s = fitted.comp.single ? single : fitted.scale;
       if (!c || c.rows !== fitted.comp.rows || Math.abs(c.width - fitted.comp.width) > 0.5 || c.style !== fitted.comp.style) {
         this.comp = this.glyph = fitted.comp;
@@ -2688,6 +2757,9 @@ h1, h2, h3 { text-wrap: balance; }
   }
   function esc(str) { return String(str).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;'); }
   function zhOf(text) { return WI.Words.zh[text] || ''; }
+  function isMath(text) { return WI.Words.isMath(text); }
+  // 提示里怎么称呼“一个格子里写的东西”
+  function unitOf(text) { return isMath(text) ? '数字或符号' : '字母'; }
   function kindLabel(ch) {
     var k = Gl.kindOf(ch);
     return k === 'num' ? '数字' : k === 'upper' ? '大写' : '小写';
@@ -2853,7 +2925,8 @@ h1, h2, h3 { text-wrap: balance; }
     app.innerHTML = '<section class="screen map w-' + id + '">' +
       header(w.name, 'home', '<span class="chip chip-star">' + icon('star', 'on') + '<b>' + p.stars + '</b><small>/' + p.maxStars + '</small></span>') +
       '<div class="scroll map-scroll"><div class="track" id="track"><svg class="track-path" aria-hidden="true"><path id="trackPath"/></svg>' + nodes + '</div>' +
-      '<p class="map-tip">' + (id === 'word' ? '每个单词先描红，再自己写：每条小横线上写一个字母。'
+      '<p class="map-tip">' + (id === 'math' ? '先写几十、几百、几千的数，再学加减乘除的符号，最后写整条算式。每条小横线上写一个数字或符号。'
+        : id === 'word' ? '每个单词先描红，再自己写：每条小横线上写一个字母。'
         : id === 'sent' ? '句子从两个词开始，越来越长；最后两关是把几句话连起来，自己写出一小段。标点已经印好，不用写。'
         : '每一关都是三步：先描红，再写虚线，最后自己写。全部三颗星有额外的宝石。') + '</p></div></section>';
     layoutMap();
@@ -2913,6 +2986,11 @@ h1, h2, h3 { text-wrap: balance; }
     trace: ['一个字母一个字母地描，写完一个接着下一个', '跟着圆点走，把每个字母描出来'],
     dots: ['沿着虚线，把每个字母写出来'],
     write: ['每条小横线上写一个字母，标点不用写', '看着示范，一个字母一个字母地写']
+  };
+  var INTRO_MATH = {
+    trace: ['一个一个地描，数字和符号都要写', '跟着圆点走，把这条算式描出来'],
+    dots: ['沿着虚线，把数字和符号写出来'],
+    write: ['每条小横线上写一个数字或符号', '看着示范，把这条算式写出来']
   };
   var HINT = {
     start: '要从闪亮的圆点开始写哦',
@@ -3021,11 +3099,11 @@ h1, h2, h3 { text-wrap: balance; }
     if (t.text) { modelText(); $('#promptText').textContent = zhOf(t.text); }
     else { $('#model').innerHTML = glyphSvg(t.ch, '', true); $('#promptText').textContent = kindLabel(t.ch) + ' ' + t.ch; }
     $('#btnCheck').hidden = t.mode !== 'write';
-    $('#btnDemo').hidden = !!t.text && t.mode === 'write';       // 自己写单词、句子时，示范就在旁边，不再演示笔顺
+    $('#btnDemo').hidden = !!t.text && t.text.length > 1 && t.mode === 'write';       // 自己写单词、句子时，示范就在旁边，不再演示笔顺
     play.checking = false;
     boardTask(t.mode);
     renderPips(); inputChip();
-    say(pickOne((t.text ? INTRO_TEXT : INTRO)[t.mode]));
+    say(pickOne((!t.text ? INTRO : t.text.length === 1 ? INTRO : isMath(t.text) ? INTRO_MATH : INTRO_TEXT)[t.mode]));
     var first = !t.text && t.mode === 'trace' && Store.rec(t.ch).n === 0;
     setTimeout(function () {
       if (!play || play.cur !== t || play.done) return;
@@ -3034,7 +3112,9 @@ h1, h2, h3 { text-wrap: balance; }
     }, 380);
   }
   function speakTask(t) {
-    if (t.text) Voice.sayText(t.text); else Voice.say(t.ch);
+    if (!t.text) Voice.say(t.ch);
+    else if (isMath(t.text)) Voice.sayMath(t.text);
+    else Voice.sayText(t.text);
   }
   // 练字页上的示范文字：按提示栏的宽度折行，字不会小到看不清
   function modelText() {
@@ -3047,7 +3127,7 @@ h1, h2, h3 { text-wrap: balance; }
   function checkWrite() {
     if (!play || play.done || !board) return;
     if (!board.hasInk()) { say('先在格子里写出来', true); return; }
-    if (play.cur.text) { checkText(); return; }
+    if (play.cur.text && play.cur.text.length > 1) { checkText(); return; }
     var t = play.cur, r = board.check();
     if (r.ok) {
       board.showGhost();
@@ -3063,13 +3143,13 @@ h1, h2, h3 { text-wrap: balance; }
       boardTask('dots');
       return;
     }
-    say(r.reason === 'tiny' ? '写得太小啦，写大一点' : r.looksLike ? '这个看起来像 ' + r.looksLike + '，再想想 ' + t.ch + ' 怎么写' : '还不太像，再试一次', true);
+    say(r.reason === 'tiny' ? '写得太小啦，写大一点' : r.looksLike ? '这个看起来像 ' + r.looksLike + '，再想想 ' + (t.ch || t.text) + ' 怎么写' : '还不太像，再试一次', true);
     setTimeout(function () { if (play && play.cur === t && !play.done && board) board.clear(); }, 1000);
   }
 
   // 单词、句子：逐个字母检查。没过关时，只把红色横线上的字母擦掉重写
   function checkText() {
-    var t = play.cur;
+    var t = play.cur, unit = unitOf(t.text);
     if (play.checking) return;
     play.checking = true;
     board.checkText(function (r) {
@@ -3077,20 +3157,20 @@ h1, h2, h3 { text-wrap: balance; }
       play.checking = false;
       var miss = r.total - r.ok;
       if (r.pass) {
-        finishTask(r.stars, r.acc, miss ? '有 ' + miss + ' 个字母没认出来，下次写清楚一点' : '');
+        finishTask(r.stars, r.acc, miss ? '有 ' + miss + ' 个' + unit + '没认出来，下次写清楚一点' : '');
         return;
       }
       play.fails++;
       Sfx.oops(); shake();
       if (play.fails >= 3) {
-        if (r.ok / r.total >= 0.6) { finishTask(1, r.acc * 0.8, '还有 ' + miss + ' 个字母要多练'); return; }
+        if (r.ok / r.total >= 0.6) { finishTask(1, r.acc * 0.8, '还有 ' + miss + ' 个' + unit + '要多练'); return; }
         play.assist = true;
         say('没关系，照着描一遍', true);
         $('#btnCheck').hidden = true;
         boardTask('trace');
         return;
       }
-      say(miss === r.total ? '在每条小横线上写一个字母' : '红色横线上的 ' + miss + ' 个字母再写一遍', true);
+      say(miss === r.total ? '在每条小横线上写一个' + unit : '红色横线上的 ' + miss + ' 个' + unit + '再写一遍', true);
       setTimeout(function () {
         if (play && play.cur === t && !play.done && board) board.eraseLetters(r.bad, play.fails >= 2);
       }, 1100);
@@ -3206,7 +3286,7 @@ h1, h2, h3 { text-wrap: balance; }
     var word = w.id === 'word';
     return '<div class="' + (word ? 'tiles tiles-word' : 'sents') + '">' + w.texts.map(function (t) {
       return '<button class="' + (word ? 'tile tile-word' : 'sent') + ' st' + Store.textStage(t) + '" data-act="' + act + '" data-text="' + esc(t) + '" aria-label="练习 ' + esc(t) + '">' +
-        textSvg(t, { scale: word ? 0.34 : 0.2, maxW: 1700 }) + '<span class="zh">' + zhOf(t) + '</span>' + starRow(Store.textStars(t), 'stars-s') + '</button>';
+        textSvg(t, { scale: word ? 0.34 : w.id === 'math' ? 0.28 : 0.2, maxW: 1700 }) + '<span class="zh">' + zhOf(t) + '</span>' + starRow(Store.textStars(t), 'stars-s') + '</button>';
     }).join('') + '</div>';
   }
   function startFreeText(text, mode) {

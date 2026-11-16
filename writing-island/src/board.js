@@ -152,7 +152,7 @@
       // 已经动笔了：板子大小变了（转屏、成绩条出现）也不重新折行，只是整体放大缩小，写好的笔迹跟着走
       this.s = c.single ? single : Math.min(this.W / (c.width + 60), this.H / (c.rows * Gl.ROW), single);
     } else {
-      var fitted = Gl.fit(this.text, null, this.W, this.H, single);
+      var fitted = Gl.fit(this.text, null, this.W, this.H, single, root.WI.Words.isMath(this.text) ? 0.62 : 0);
       this.s = fitted.comp.single ? single : fitted.scale;
       if (!c || c.rows !== fitted.comp.rows || Math.abs(c.width - fitted.comp.width) > 0.5 || c.style !== fitted.comp.style) {
         this.comp = this.glyph = fitted.comp;

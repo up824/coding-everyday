@@ -1,5 +1,5 @@
 /*
- * 写字岛 — 单词和句子
+ * 写字岛 — 单词、句子、多位数和算式
  *
  * 每一项是 [英文, 中文意思]。句子按单词数从少到多排：两个词 → 十二个词 → 连成一小段话。
  * 只能用字母、数字、空格和 . , ? ! ' 这几个标点（笔画数据里有的字符）。
@@ -37,12 +37,67 @@
     { title: '一段话：我的一天', para: true, items: [['I get up at seven.', '我七点起床。'], ['I go to school with my friends.', '我和朋友们一起去上学。'], ['After school I read books and play football.', '放学后我看书、踢足球。'], ['I go to bed at nine.', '我九点睡觉。']] }
   ];
 
+  /* ---------- 多位数和算式 ----------
+     只写式子本身，中文读法（三加五等于八）由下面的函数算出来。减号用键盘上的 -，乘除用 × ÷。 */
+  var MATH_SRC = [
+    { title: '两位数', items: ['10', '25', '48', '60', '99'] },
+    { title: '几百', items: ['100', '256', '380', '705', '999'] },
+    { title: '几千', items: ['1000', '2048', '3650', '5007', '9999'] },
+    { title: '运算符号', items: ['+', '-', '×', '÷', '='] },
+    { title: '加法', items: ['3 + 5 = 8', '12 + 7 = 19', '25 + 30 = 55', '140 + 60 = 200'] },
+    { title: '减法', items: ['9 - 4 = 5', '15 - 8 = 7', '60 - 25 = 35', '500 - 120 = 380'] },
+    { title: '乘法', items: ['2 × 3 = 6', '6 × 7 = 42', '12 × 4 = 48', '25 × 4 = 100'] },
+    { title: '除法', items: ['8 ÷ 2 = 4', '24 ÷ 6 = 4', '81 ÷ 9 = 9', '100 ÷ 5 = 20'] },
+    { title: '大数算式', items: ['125 + 375 = 500', '1000 - 250 = 750', '300 × 3 = 900', '2400 ÷ 6 = 400'] }
+  ];
+
+  var ZD = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九'], ZU = ['', '十', '百', '千'];
+  function numZh(n) {
+    var str = String(n), out = '', gap = false;
+    if (n === 0) return ZD[0];
+    for (var i = 0; i < str.length; i++) {
+      var c = +str[i];
+      if (c === 0) { gap = true; continue; }
+      if (gap && out) out += ZD[0];              // 中间有 0：七百零五
+      gap = false;
+      out += ZD[c] + ZU[str.length - 1 - i];
+    }
+    return n >= 10 && n < 20 ? out.replace(/^一十/, '十') : out;
+  }
+  var E1 = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve',
+    'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen'];
+  var E10 = ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'];
+  function numEn(n) {
+    if (n < 20) return E1[n];
+    if (n < 100) return E10[Math.floor(n / 10)] + (n % 10 ? '-' + E1[n % 10] : '');
+    if (n < 1000) return E1[Math.floor(n / 100)] + ' hundred' + (n % 100 ? ' ' + numEn(n % 100) : '');
+    return numEn(Math.floor(n / 1000)) + ' thousand' + (n % 1000 ? ' ' + numEn(n % 1000) : '');
+  }
+  var OP_ZH = { '+': '加', '-': '减', '×': '乘', '÷': '除以', '=': '等于' };
+  var OP_EN = { '+': 'plus', '-': 'minus', '×': 'times', '÷': 'divided by', '=': 'equals' };
+  var SIGN_ZH = { '+': '加号', '-': '减号', '×': '乘号', '÷': '除号', '=': '等号' };
+  var SIGN_EN = { '+': 'plus sign', '-': 'minus sign', '×': 'times sign', '÷': 'division sign', '=': 'equals sign' };
+  function isMath(text) { return /^[0-9+\-×÷= ]+$/.test(text); }
+  function readMath(text, en) {
+    if (text.length === 1 && OP_ZH[text]) return en ? SIGN_EN[text] : SIGN_ZH[text];
+    return text.split(' ').map(function (tok) {
+      if (/^[0-9]+$/.test(tok)) return en ? numEn(+tok) : numZh(+tok);
+      return en ? OP_EN[tok] : OP_ZH[tok];
+    }).join(en ? ' ' : '');
+  }
+  var MATH = MATH_SRC.map(function (g) {
+    return { title: g.title, items: g.items.map(function (t) { return [t, readMath(t, false)]; }) };
+  });
+
   var zh = {};
-  WORDS.concat(SENTS).forEach(function (g) { g.items.forEach(function (it) { zh[it[0]] = it[1]; }); });
+  WORDS.concat(SENTS, MATH).forEach(function (g) { g.items.forEach(function (it) { zh[it[0]] = it[1]; }); });
 
   function wordCount(text) { return text.split(' ').length; }
   function letterCount(text) { return text.replace(/ /g, '').length; }
 
   root.WI = root.WI || {};
-  root.WI.Words = { WORDS: WORDS, SENTS: SENTS, zh: zh, wordCount: wordCount, letterCount: letterCount };
+  root.WI.Words = {
+    WORDS: WORDS, SENTS: SENTS, MATH: MATH, zh: zh, wordCount: wordCount, letterCount: letterCount,
+    isMath: isMath, readMath: readMath, numZh: numZh, numEn: numEn
+  };
 })(typeof window !== 'undefined' ? window : globalThis);

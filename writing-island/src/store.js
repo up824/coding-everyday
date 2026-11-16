@@ -16,7 +16,8 @@
     { id: 'num', name: '数字岛', short: '数字', sample: '123', range: '0 – 9', chars: Gl.DIGITS, groups: [['1', '2', '3'], ['4', '5', '6'], ['7', '8', '9', '0']], bossN: 10 },
     { id: 'upper', name: '大写字母岛', short: '大写', sample: 'ABC', range: 'A – Z', chars: Gl.UPPER, groups: chunk(Gl.UPPER, 3), bossN: 8 },
     { id: 'lower', name: '小写字母岛', short: '小写', sample: 'abc', range: 'a – z', chars: Gl.LOWER, groups: chunk(Gl.LOWER, 3), bossN: 8 },
-    // 单词和句子：text 为真，关卡里放的是一串文字而不是单个字符
+    // 算式、单词和句子：text 为真，关卡里放的是一串文字而不是单个字符
+    { id: 'math', name: '算术岛', short: '算术', sample: '1+2=3', text: true, groups: Wd.MATH, bossN: 6 },
     { id: 'word', name: '单词岛', short: '单词', sample: 'cat', text: true, groups: Wd.WORDS, bossN: 6 },
     { id: 'sent', name: '句子岛', short: '句子', sample: 'I can.', text: true, groups: Wd.SENTS, bossN: 0 }
   ];
@@ -292,6 +293,7 @@
     { id: 'num', name: '数字岛岛主', desc: '通关数字岛', test: function () { return worldCleared('num'); } },
     { id: 'upper', name: '大写岛岛主', desc: '通关大写字母岛', test: function () { return worldCleared('upper'); } },
     { id: 'lower', name: '小写岛岛主', desc: '通关小写字母岛', test: function () { return worldCleared('lower'); } },
+    { id: 'math', name: '算术岛岛主', desc: '通关算术岛', test: function () { return worldCleared('math'); } },
     { id: 'word', name: '单词岛岛主', desc: '通关单词岛', test: function () { return worldCleared('word'); } },
     { id: 'sent', name: '会写一段话', desc: '通关句子岛', test: function () { return worldCleared('sent'); } },
     { id: 'd3', name: '坚持 3 天', desc: '连续 3 天来练字', test: function () { return streak() >= 3; } },

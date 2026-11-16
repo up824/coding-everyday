@@ -151,7 +151,7 @@ const url = 'file://' + path.join(__dirname, '..', 'index.html');
   /* ---------- 单词和句子 ---------- */
   {
     const p = await open({ width: 1180, height: 820 });
-    check(await p.locator('.island').count() === 5, 'five islands on the home screen');
+    check(await p.locator('.island').count() === 6, 'six islands on the home screen');
     await shot(p, '30-home-5');
     // 每个字母的每一笔在屏幕上的坐标；swap 可以把某个位置换成别的字母（模拟写错）
     const letterPts = (page, swap) => page.evaluate((swap) => {
@@ -281,6 +281,58 @@ const url = 'file://' + path.join(__dirname, '..', 'index.html');
       await q.waitForTimeout(600); await shot(q, '46-' + name + '-written');
       await q.context().close();
     }
+  }
+
+  /* ---------- 多位数和算式 ---------- */
+  {
+    const p = await open({ width: 1180, height: 820 });
+    const letterPts = (page, swap) => page.evaluate((swap) => {
+      const b = WI.App.board, r = b.host.getBoundingClientRect();
+      return b.comp.letters.map((L, i) => {
+        if (L.fixed) return [];
+        const g = swap && swap[i] ? WI.Glyphs.get(swap[i]) : L.g;
+        return g.strokes.map(st => st.pts.map(q => [r.left + b.ox + (q.x + L.x) * b.s, r.top + b.oy + (q.y + L.y) * b.s]));
+      });
+    }, swap || null);
+    const writeText = async (page, swap) => {
+      for (const letter of await letterPts(page, swap)) for (const st of letter) await draw(page, st.length > 1 ? st : [st[0], st[0]], 1, 2);
+    };
+    await p.click('.island.w-math'); await p.waitForSelector('.map'); await p.waitForTimeout(200);
+    check(await p.locator('.node').count() === 10, 'math island has nine levels and a challenge');
+    await shot(p, '50-math-map');
+    await p.evaluate(() => WI.App.startSession({ kind: 'free', back: { name: 'home' }, tasks: [
+      { text: '2048', mode: 'write' }, { text: '×', mode: 'trace' }, { text: '÷', mode: 'write' },
+      { text: '6 × 7 = 42', mode: 'trace' }, { text: '1000 - 250 = 750', mode: 'write' }] }));
+    await p.waitForSelector('.play'); await p.waitForTimeout(500);
+    const modes = ['write', 'trace', 'write', 'trace', 'write'];
+    for (let i = 0; i < modes.length; i++) {
+      await p.waitForTimeout(350);
+      if (i === 4) check(await p.evaluate(() => WI.App.board.comp.rows === 1), 'expression is laid out on one line');
+      if (modes[i] === 'write') { await writeText(p); if (i === 4) await shot(p, '52-math-write'); await p.click('#btnCheck'); }
+      else { if (i === 3) { await p.waitForTimeout(300); await shot(p, '51-math-trace'); } await writeChar(p, 1); }
+      await p.waitForSelector('#banner:not([hidden])', { timeout: 6000 });
+      if (i === 4) { await p.waitForTimeout(700); await shot(p, '53-math-done'); }
+      if (i < modes.length - 1) await p.click('[data-act="next"]');
+    }
+    const mr = await p.evaluate(() => ({ best: WI.App.play.best, rec: WI.Store.trec('1000 - 250 = 750').s, zh: WI.Words.zh['1000 - 250 = 750'] }));
+    check([0, 1, 2, 3, 4].every(i => mr.best[i] >= 2) && mr.rec[2] >= 2, 'numbers, symbols and expressions are traced and recognised: ' + JSON.stringify(mr));
+    // 把加号写成乘号：只有那个符号标红
+    await p.evaluate(() => WI.App.startSession({ kind: 'free', tasks: [{ text: '3 + 5 = 8', mode: 'write' }], back: { name: 'home' } }));
+    await p.waitForSelector('.play'); await p.waitForTimeout(500);
+    await writeText(p, { 1: '×' });
+    await p.click('#btnCheck'); await p.waitForTimeout(400);
+    const mw = await p.evaluate(() => ({ marks: WI.App.board.marks.join(','), done: WI.App.play.done }));
+    check(mw.marks === 'ok,bad,ok,ok,ok' && !mw.done, 'writing × for + flags only the sign: ' + JSON.stringify(mw));
+    await shot(p, '54-math-wrong');
+    await p.click('[data-act="quit"]'); await p.waitForTimeout(200);
+    await p.evaluate(() => WI.App.go('pick')); await p.waitForSelector('.pick');
+    await p.click('[data-act="pick-tab"][data-id="math"]'); await shot(p, '55-pick-math');
+    await p.evaluate(() => WI.App.go('home')); await p.waitForSelector('.home'); await shot(p, '56-home-6');
+    await p.context().close();
+    const ph = await open({ width: 400, height: 780 });
+    await shot(ph, '57-phone-home-6');
+    check(!(await ph.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1)), 'phone home with six islands scrolls sideways');
+    await ph.context().close();
   }
 
   /* ---------- 换字体 ---------- */

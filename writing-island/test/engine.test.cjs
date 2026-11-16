@@ -136,7 +136,17 @@ function seg(x1, y1, x2, y2) { return [{ x: x1, y: y1 }, { x: x2, y: y2 }]; }
 /* ---------- 单词和句子：排版 + 整句描红 ---------- */
 {
   const texts = [];
-  for (const g of Wd.WORDS.concat(Wd.SENTS)) for (const [t] of g.items) texts.push(t);
+  for (const g of Wd.WORDS.concat(Wd.SENTS, Wd.MATH)) for (const [t] of g.items) texts.push(t);
+  // 算式本身要算得对；读法要对
+  for (const g of Wd.MATH) for (const [t] of g.items) {
+    if (!t.includes('=') || t.length === 1) continue;
+    const [left, right] = t.split(' = ');
+    const value = Function('return ' + left.replace(/×/g, '*').replace(/÷/g, '/'))();
+    check(value === Number(right), 'wrong arithmetic: ' + t);
+  }
+  check(Wd.readMath('705') === '七百零五' && Wd.readMath('12 + 7 = 19') === '十二加七等于十九' && Wd.readMath('2400 ÷ 6 = 400') === '二千四百除以六等于四百', 'Chinese readings');
+  check(Wd.readMath('1000 - 250 = 750', true) === 'one thousand minus two hundred fifty equals seven hundred fifty' && Wd.readMath('×', true) === 'times sign', 'English readings');
+  check(Gl.fit('1000 - 250 = 750', 'print', 880, 700, 0, 0.62).comp.rows === 1, 'an expression stays on one line on a tablet');
   // 内容里的每个字符都要有笔画数据
   for (const t of texts) for (const c of t) check(c === ' ' || !!Gl.get(c), 'no glyph for ' + JSON.stringify(c) + ' in ' + t);
   // 短的排一行，长句子折成几行，而且都放得进板子
@@ -225,6 +235,21 @@ for (const st of Gl.STYLES) {
   for (const [x, y] of [['b', 'd'], ['d', 'b'], ['p', 'q'], ['q', 'p'], ['6', '9'], ['S', 'Z'], ['A', 'B'], ['3', 'E'], ['M', 'W'], ['l', 'L'], ['t', 'f'], ['u', 'n'], ['h', 'n']]) {
     const r = En.recognize(tplStrokes(x), y);
     check(!r.ok, `[${st.id}] ${x} accepted as ${y}`);
+  }
+}
+Gl.setStyle('print');
+// 运算符号：写对了要认得，互相写混了要判错
+for (const st of Gl.STYLES) {
+  Gl.setStyle(st.id);
+  let ok = 0, kid = 0;
+  for (const op of Gl.OPS) {
+    if (En.recognize(tplStrokes(op), op).ok) ok++;
+    for (let r = 0; r < 6; r++) if (En.recognize(distort(tplStrokes(op), { amp: 3, sc: 0.18, rot: 6, sh: 0.1, so: 3, ss: 0.1, shuffle: true }), op).ok) kid++;
+  }
+  console.log(`运算符号 [${st.id}] 原样 ${ok}/5 孩子笔迹 ${kid}/30`);
+  check(ok === 5 && kid >= 28, `[${st.id}] operators recognised: ${ok}/5, ${kid}/30`);
+  for (const [x, y] of [['+', '×'], ['×', '+'], ['-', '='], ['=', '-'], ['÷', '-'], ['-', '÷'], ['+', '-'], ['=', '÷'], ['1', '-'], ['-', '1'], ['7', '+'], ['4', '+'], ['0', '÷'], ['8', '=']]) {
+    check(!En.recognize(tplStrokes(x), y).ok, `[${st.id}] ${x} accepted as ${y}`);
   }
 }
 Gl.setStyle('print');

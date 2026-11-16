@@ -74,37 +74,35 @@
     if (kind === 'num') return '写数字 ' + ch;
     return (kind === 'upper' ? '写大写字母 ' : '写小写字母 ') + ch.toUpperCase();
   }
-  function say(ch) {
-    var lang = Store.s.set.voice;
-    if (lang === 'off') return;
-    // 在 iPadOS App 里用系统的朗读，比网页朗读更稳
-    if (Store.native({ type: 'speak', text: promptText(ch, lang), lang: lang === 'en' ? 'en-US' : 'zh-CN' })) return;
-    try {
-      var synth = root.speechSynthesis;
-      if (!synth || !root.SpeechSynthesisUtterance) return;
-      synth.cancel();
-      var u = new root.SpeechSynthesisUtterance(promptText(ch, lang));
-      u.lang = lang === 'en' ? 'en-US' : 'zh-CN';
-      u.rate = 0.9;
-      synth.speak(u);
-    } catch (e) { /* 有的环境不让朗读，没关系 */ }
-  }
-
-  // 朗读一个单词或一句话（内容是英文，所以总是用英文读）
-  function sayText(text) {
-    if (Store.s.set.voice === 'off') return;
-    if (Store.native({ type: 'speak', text: text, lang: 'en-US' })) return;
+  // 朗读一段文字。在 iPadOS App 里用系统的朗读，比网页朗读更稳。
+  function speak(text, lang, rate) {
+    if (Store.native({ type: 'speak', text: text, lang: lang })) return;
     try {
       var synth = root.speechSynthesis;
       if (!synth || !root.SpeechSynthesisUtterance) return;
       synth.cancel();
       var u = new root.SpeechSynthesisUtterance(text);
-      u.lang = 'en-US';
-      u.rate = 0.8;
+      u.lang = lang;
+      u.rate = rate || 0.9;
       synth.speak(u);
-    } catch (e) {}
+    } catch (e) { /* 有的环境不让朗读，没关系 */ }
+  }
+  function say(ch) {
+    var lang = Store.s.set.voice;
+    if (lang === 'off') return;
+    speak(promptText(ch, lang), lang === 'en' ? 'en-US' : 'zh-CN');
+  }
+  // 单词、句子：内容是英文，所以总是用英文读
+  function sayText(text) {
+    if (Store.s.set.voice !== 'off') speak(text, 'en-US', 0.8);
+  }
+  // 数和算式：按设置里的语言读（三加五等于八 / three plus five equals eight）
+  function sayMath(text) {
+    var lang = Store.s.set.voice;
+    if (lang === 'off') return;
+    speak(root.WI.Words.readMath(text, lang === 'en'), lang === 'en' ? 'en-US' : 'zh-CN', 0.85);
   }
 
   root.WI.Sfx = Sfx;
-  root.WI.Voice = { say: say, sayText: sayText, promptText: promptText };
+  root.WI.Voice = { say: say, sayText: sayText, sayMath: sayMath, promptText: promptText };
 })(typeof window !== 'undefined' ? window : globalThis);

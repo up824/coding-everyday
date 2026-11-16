@@ -102,6 +102,13 @@
   G['y'] = ['M26 50 L50 100', 'M74 50 L26 150'];
   G['z'] = ['M26 50 L74 50 L26 100 L74 100'];
 
+  /* ---------- 运算符号（要孩子自己写）。和数字一样高，居中在第二线上 ---------- */
+  G['+'] = ['M24 50 L76 50', 'M50 24 L50 76'];
+  G['-'] = ['M24 50 L76 50'];
+  G['×'] = ['M29 29 L71 71', 'M71 29 L29 71'];
+  G['÷'] = ['M22 50 L78 50', 'M50 26 L50 27', 'M50 73 L50 74'];
+  G['='] = ['M24 38 L76 38', 'M24 62 L76 62'];
+
   /* ---------- 标点（句子里只印出来，不要求孩子写） ---------- */
   G['.'] = ['M50 93 L50 94'];
   G[','] = ['M53 90 C55 100 51 108 43 114'];
@@ -243,6 +250,7 @@
   }
 
   var DIGITS = '0123456789'.split('');
+  var OPS = ['+', '-', '×', '÷', '='];
   var UPPER = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
   var LOWER = 'abcdefghijklmnopqrstuvwxyz'.split('');
 
@@ -250,6 +258,7 @@
     if (ch >= '0' && ch <= '9') return 'num';
     if (ch >= 'A' && ch <= 'Z') return 'upper';
     if (ch >= 'a' && ch <= 'z') return 'lower';
+    if (OPS.indexOf(ch) >= 0) return 'op';
     return 'punct';
   }
 
@@ -320,7 +329,9 @@
     return { text: text, style: st.id, single: false, rows: w.lines.length, width: w.width, height: (w.lines.length - 1) * ROW + 150, letters: letters, strokes: strokes };
   }
   // 在 W×H（像素）的板子上，折成几行字最大：返回 {comp, scale}
-  function fit(text, styleId, W, H, cap) {
+  // comfy：字大到这个程度就不再多折一行（算式传得小一些，尽量整条排在一行里）
+  function fit(text, styleId, W, H, cap, comfy) {
+    comfy = comfy || COMFY;
     var st = styleOf(styleId || current);
     if (text.length === 1) return { comp: compose(text, st.id), scale: Math.min(H / ROW, W / 150) };
     var one = wrap(text, st.id, 0), longest = 0;
@@ -336,7 +347,7 @@
       var sc = Math.min(W / (wr.width + 60), H / (wr.lines.length * ROW));
       if (cap) sc = Math.min(sc, cap);
       // 字已经够大就不再多折一行；不够大时，多一行至少要大 8% 才值得
-      if (!best || (best.scale < COMFY && sc > best.scale * 1.08)) best = { maxW: hi, scale: sc, rows: wr.lines.length };
+      if (!best || (best.scale < comfy && sc > best.scale * 1.08)) best = { maxW: hi, scale: sc, rows: wr.lines.length };
       if (wr.lines.length < r) break;
     }
     return { comp: compose(text, st.id, best.maxW), scale: best.scale };
@@ -365,6 +376,6 @@
     style: function () { return styleOf(current); },
     setStyle: function (id) { current = styleOf(id).id; },
     PIVOT: PIVOT, resample: resample, polyLength: polyLength,
-    DIGITS: DIGITS, UPPER: UPPER, LOWER: LOWER, ALL: DIGITS.concat(UPPER, LOWER), STEP: STEP
+    DIGITS: DIGITS, UPPER: UPPER, LOWER: LOWER, OPS: OPS, ALL: DIGITS.concat(UPPER, LOWER), STEP: STEP
   };
 })(typeof window !== 'undefined' ? window : globalThis);

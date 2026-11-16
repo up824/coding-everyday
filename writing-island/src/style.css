@@ -23,7 +23,8 @@
   --grape-deep: #5F37CC;
   --leaf: #1FAE70;         /* 写对了、起笔点 */
   --leaf-deep: #14845A;
-  --gem: #12B8CC;          /* 宝石 */
+  --gem: #12B8CC;          /* 宝石、算术岛 */
+  --gem-deep: #0B8797;
   --rose: #E5486A;         /* 提醒 */
   --rose-deep: #B32E4C;
   --warn-bg: #FFF0D2;
@@ -130,11 +131,12 @@ h1, h2, h3 { text-wrap: balance; }
 .font-btn .ic { width: 20px; height: 20px; color: var(--ink-2); }
 .islands { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 16px; }
 .island { grid-column: span 2; }
-.island.island-wide { grid-column: span 3; flex-direction: row; align-items: stretch; }
-.island.island-wide .island-art { flex: none; width: 40%; display: flex; align-items: center; padding: 12px 14px; }
+.island.island-wide { grid-column: span 2; flex-direction: row; align-items: stretch; }
+.island.island-wide .island-art { flex: none; width: 44%; display: flex; align-items: center; padding: 12px; }
 .island.island-wide .island-info { flex: 1; min-width: 0; justify-content: center; }
 .w-word { --accent: var(--leaf); --accent-deep: var(--leaf-deep); }
 .w-sent { --accent: var(--gold); --accent-deep: var(--sun-deep); }
+.w-math { --accent: var(--gem); --accent-deep: var(--gem-deep); }
 .island { display: flex; flex-direction: column; text-align: left; background: var(--card); border-radius: 26px; overflow: hidden; box-shadow: 0 6px 0 var(--accent-deep); min-width: 0; }
 .island:active { transform: translateY(4px); box-shadow: 0 2px 0 var(--accent-deep); }
 .island-art { display: block; padding: 14px 12px 8px; background: var(--accent); color: var(--on-accent); overflow: hidden; }

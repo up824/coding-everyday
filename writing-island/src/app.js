@@ -63,6 +63,9 @@
   }
   function esc(str) { return String(str).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;'); }
   function zhOf(text) { return WI.Words.zh[text] || ''; }
+  function isMath(text) { return WI.Words.isMath(text); }
+  // 提示里怎么称呼“一个格子里写的东西”
+  function unitOf(text) { return isMath(text) ? '数字或符号' : '字母'; }
   function kindLabel(ch) {
     var k = Gl.kindOf(ch);
     return k === 'num' ? '数字' : k === 'upper' ? '大写' : '小写';
@@ -228,7 +231,8 @@
     app.innerHTML = '<section class="screen map w-' + id + '">' +
       header(w.name, 'home', '<span class="chip chip-star">' + icon('star', 'on') + '<b>' + p.stars + '</b><small>/' + p.maxStars + '</small></span>') +
       '<div class="scroll map-scroll"><div class="track" id="track"><svg class="track-path" aria-hidden="true"><path id="trackPath"/></svg>' + nodes + '</div>' +
-      '<p class="map-tip">' + (id === 'word' ? '每个单词先描红，再自己写：每条小横线上写一个字母。'
+      '<p class="map-tip">' + (id === 'math' ? '先写几十、几百、几千的数，再学加减乘除的符号，最后写整条算式。每条小横线上写一个数字或符号。'
+        : id === 'word' ? '每个单词先描红，再自己写：每条小横线上写一个字母。'
         : id === 'sent' ? '句子从两个词开始，越来越长；最后两关是把几句话连起来，自己写出一小段。标点已经印好，不用写。'
         : '每一关都是三步：先描红，再写虚线，最后自己写。全部三颗星有额外的宝石。') + '</p></div></section>';
     layoutMap();
@@ -288,6 +292,11 @@
     trace: ['一个字母一个字母地描，写完一个接着下一个', '跟着圆点走，把每个字母描出来'],
     dots: ['沿着虚线，把每个字母写出来'],
     write: ['每条小横线上写一个字母，标点不用写', '看着示范，一个字母一个字母地写']
+  };
+  var INTRO_MATH = {
+    trace: ['一个一个地描，数字和符号都要写', '跟着圆点走，把这条算式描出来'],
+    dots: ['沿着虚线，把数字和符号写出来'],
+    write: ['每条小横线上写一个数字或符号', '看着示范，把这条算式写出来']
   };
   var HINT = {
     start: '要从闪亮的圆点开始写哦',
@@ -396,11 +405,11 @@
     if (t.text) { modelText(); $('#promptText').textContent = zhOf(t.text); }
     else { $('#model').innerHTML = glyphSvg(t.ch, '', true); $('#promptText').textContent = kindLabel(t.ch) + ' ' + t.ch; }
     $('#btnCheck').hidden = t.mode !== 'write';
-    $('#btnDemo').hidden = !!t.text && t.mode === 'write';       // 自己写单词、句子时，示范就在旁边，不再演示笔顺
+    $('#btnDemo').hidden = !!t.text && t.text.length > 1 && t.mode === 'write';       // 自己写单词、句子时，示范就在旁边，不再演示笔顺
     play.checking = false;
     boardTask(t.mode);
     renderPips(); inputChip();
-    say(pickOne((t.text ? INTRO_TEXT : INTRO)[t.mode]));
+    say(pickOne((!t.text ? INTRO : t.text.length === 1 ? INTRO : isMath(t.text) ? INTRO_MATH : INTRO_TEXT)[t.mode]));
     var first = !t.text && t.mode === 'trace' && Store.rec(t.ch).n === 0;
     setTimeout(function () {
       if (!play || play.cur !== t || play.done) return;
@@ -409,7 +418,9 @@
     }, 380);
   }
   function speakTask(t) {
-    if (t.text) Voice.sayText(t.text); else Voice.say(t.ch);
+    if (!t.text) Voice.say(t.ch);
+    else if (isMath(t.text)) Voice.sayMath(t.text);
+    else Voice.sayText(t.text);
   }
   // 练字页上的示范文字：按提示栏的宽度折行，字不会小到看不清
   function modelText() {
@@ -422,7 +433,7 @@
   function checkWrite() {
     if (!play || play.done || !board) return;
     if (!board.hasInk()) { say('先在格子里写出来', true); return; }
-    if (play.cur.text) { checkText(); return; }
+    if (play.cur.text && play.cur.text.length > 1) { checkText(); return; }
     var t = play.cur, r = board.check();
     if (r.ok) {
       board.showGhost();
@@ -438,13 +449,13 @@
       boardTask('dots');
       return;
     }
-    say(r.reason === 'tiny' ? '写得太小啦，写大一点' : r.looksLike ? '这个看起来像 ' + r.looksLike + '，再想想 ' + t.ch + ' 怎么写' : '还不太像，再试一次', true);
+    say(r.reason === 'tiny' ? '写得太小啦，写大一点' : r.looksLike ? '这个看起来像 ' + r.looksLike + '，再想想 ' + (t.ch || t.text) + ' 怎么写' : '还不太像，再试一次', true);
     setTimeout(function () { if (play && play.cur === t && !play.done && board) board.clear(); }, 1000);
   }
 
   // 单词、句子：逐个字母检查。没过关时，只把红色横线上的字母擦掉重写
   function checkText() {
-    var t = play.cur;
+    var t = play.cur, unit = unitOf(t.text);
     if (play.checking) return;
     play.checking = true;
     board.checkText(function (r) {
@@ -452,20 +463,20 @@
       play.checking = false;
       var miss = r.total - r.ok;
       if (r.pass) {
-        finishTask(r.stars, r.acc, miss ? '有 ' + miss + ' 个字母没认出来，下次写清楚一点' : '');
+        finishTask(r.stars, r.acc, miss ? '有 ' + miss + ' 个' + unit + '没认出来，下次写清楚一点' : '');
         return;
       }
       play.fails++;
       Sfx.oops(); shake();
       if (play.fails >= 3) {
-        if (r.ok / r.total >= 0.6) { finishTask(1, r.acc * 0.8, '还有 ' + miss + ' 个字母要多练'); return; }
+        if (r.ok / r.total >= 0.6) { finishTask(1, r.acc * 0.8, '还有 ' + miss + ' 个' + unit + '要多练'); return; }
         play.assist = true;
         say('没关系，照着描一遍', true);
         $('#btnCheck').hidden = true;
         boardTask('trace');
         return;
       }
-      say(miss === r.total ? '在每条小横线上写一个字母' : '红色横线上的 ' + miss + ' 个字母再写一遍', true);
+      say(miss === r.total ? '在每条小横线上写一个' + unit : '红色横线上的 ' + miss + ' 个' + unit + '再写一遍', true);
       setTimeout(function () {
         if (play && play.cur === t && !play.done && board) board.eraseLetters(r.bad, play.fails >= 2);
       }, 1100);
@@ -581,7 +592,7 @@
     var word = w.id === 'word';
     return '<div class="' + (word ? 'tiles tiles-word' : 'sents') + '">' + w.texts.map(function (t) {
       return '<button class="' + (word ? 'tile tile-word' : 'sent') + ' st' + Store.textStage(t) + '" data-act="' + act + '" data-text="' + esc(t) + '" aria-label="练习 ' + esc(t) + '">' +
-        textSvg(t, { scale: word ? 0.34 : 0.2, maxW: 1700 }) + '<span class="zh">' + zhOf(t) + '</span>' + starRow(Store.textStars(t), 'stars-s') + '</button>';
+        textSvg(t, { scale: word ? 0.34 : w.id === 'math' ? 0.28 : 0.2, maxW: 1700 }) + '<span class="zh">' + zhOf(t) + '</span>' + starRow(Store.textStars(t), 'stars-s') + '</button>';
     }).join('') + '</div>';
   }
   function startFreeText(text, mode) {

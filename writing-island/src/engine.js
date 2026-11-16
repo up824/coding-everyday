@@ -298,7 +298,8 @@
   }
 
   // 形状一样、只靠大小和占格区分的字符：互相不算“写错”
-  var GROUPS = ['cC', 'oO0', 'sS', 'vV', 'wW', 'xX', 'zZ', 'uU', 'kK', 'pP', '1lI'];
+  // 乘号和 x 一个样；加号和小写 t 只差一点点，也互相不算错
+  var GROUPS = ['cC', 'oO0', 'sS', 'vV', 'wW', 'xX×', 'zZ', 'uU', 'kK', 'pP', '1lI', '+t'];
   function mates(a, b) {
     for (var i = 0; i < GROUPS.length; i++) {
       if (GROUPS[i].indexOf(a) >= 0 && GROUPS[i].indexOf(b) >= 0) return true;
@@ -309,7 +310,7 @@
   var templates = null;
   function getTemplates() {
     if (templates) return templates;
-    templates = Gl.ALL.map(function (ch) {
+    templates = Gl.ALL.concat(Gl.OPS).map(function (ch) {
       return {
         ch: ch, box: Gl.get(ch).box,
         clouds: Gl.variants(ch).map(function (v) { return toCloud(v).pts; })
